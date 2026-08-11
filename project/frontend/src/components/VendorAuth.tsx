@@ -90,11 +90,18 @@ export default function VendorAuth() {
       }
 
       if (mode === 'signup') {
+        const cleanPhone = phone.replace(/\D/g, '');
+        if (cleanPhone.length !== 10) {
+          throw new Error('Please enter a valid 10-digit mobile number.');
+        }
+        if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+          throw new Error('Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.');
+        }
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: { account_type: 'vendor', business_name: businessName, shop_no: shopNo, gst_no: gstNo, phone },
+            data: { account_type: 'vendor', business_name: businessName, shop_no: shopNo, gst_no: gstNo, phone: cleanPhone },
             emailRedirectTo: `${window.location.origin}/vendor`,
           },
         });
@@ -254,13 +261,15 @@ export default function VendorAuth() {
                 className="input"
               />
             </Field>
-            <Field icon={<Phone className="h-4 w-4" />} label="Phone">
+            <Field icon={<Phone className="h-4 w-4" />} label="Phone number (10 digits)">
               <input
                 type="tel"
                 required
+                maxLength={10}
+                pattern="[6-9][0-9]{9}"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+91 98765 43210"
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="10-digit mobile (e.g. 9876543210)"
                 className="input"
               />
             </Field>

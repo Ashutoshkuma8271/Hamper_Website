@@ -115,12 +115,19 @@ export default function UserAuth() {
       }
 
       if (mode === 'signup') {
+        const cleanPhone = phone.replace(/\D/g, '');
+        if (cleanPhone.length !== 10) {
+          throw new Error('Please enter a valid 10-digit mobile number.');
+        }
+        if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+          throw new Error('Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.');
+        }
         if (!isStrongPassword(password)) throw new Error('Use at least 8 characters with uppercase, lowercase, and a number.');
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: { account_type: 'user', full_name: name, phone },
+            data: { account_type: 'user', full_name: name, phone: cleanPhone },
             emailRedirectTo: `${window.location.origin}/profile`,
           },
         });
@@ -229,14 +236,16 @@ export default function UserAuth() {
         )}
 
         {mode === 'signup' && (
-          <Field icon={<Phone className="h-4 w-4" />} label="Phone number">
+          <Field icon={<Phone className="h-4 w-4" />} label="Phone number (10 digits)">
             <input
               type="tel"
               required
+              maxLength={10}
+              pattern="[6-9][0-9]{9}"
               autoComplete="tel"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="Your phone number"
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              placeholder="10-digit mobile (e.g. 9876543210)"
               className="input"
             />
           </Field>
