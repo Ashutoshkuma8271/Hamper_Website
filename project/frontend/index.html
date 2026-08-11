@@ -12,17 +12,32 @@
     <meta property="og:image" content="https://images.pexels.com/photos/11112057/pexels-photo-11112057.jpeg?auto=compress&cs=tinysrgb&h=650&w=940" />
     <meta name="twitter:card" content="summary_large_image" />
 
-    <!-- CDN Preconnects for Faster Asset & Font Resolution (Reduces LCP & TTFB) -->
+    <!-- Critical Image Preload for Mobile LCP Optimization -->
+    <link rel="preload" as="image" href="/hero-hamper.webp" type="image/webp" fetchpriority="high" />
+
+    <!-- CDN Preconnects & DNS Prefetch -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preconnect" href="https://images.pexels.com" />
-    <link rel="preconnect" href="https://cdn-icons-png.flaticon.com" />
+    <link rel="dns-prefetch" href="https://images.pexels.com" />
 
-    <!-- Optimized Google Fonts with display=swap (Prevents FOUT & CLS layout shifts) -->
+    <!-- Non-Render-Blocking Google Fonts (Eliminates FCP render delay on mobile) -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap"
+    />
     <link
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
   </head>
   <body className="bg-cream-50 text-ink-700 antialiased selection:bg-wine-600 selection:text-cream-50 dark:bg-gray-900 dark:text-gray-100">
     <div id="root"></div>

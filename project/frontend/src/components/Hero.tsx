@@ -97,10 +97,10 @@ export default function Hero() {
             <img
               src={HERO_IMG}
               alt="Luxury hand-packed gift hamper with chocolates, candle and dried flowers"
-              width={1200}
-              height={900}
+              width={800}
+              height={1000}
               fetchPriority="high"
-              decoding="sync"
+              decoding="async"
               className="h-full w-full object-cover"
               loading="eager"
             />
