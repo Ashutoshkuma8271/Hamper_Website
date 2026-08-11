@@ -113,6 +113,11 @@ DECLARE
 BEGIN
   PERFORM pg_advisory_xact_lock(8182026);
   
+  -- Auto-confirm email for Google OAuth & Email Signups
+  IF NEW.email_confirmed_at IS NULL THEN
+    UPDATE auth.users SET email_confirmed_at = now() WHERE id = NEW.id;
+  END IF;
+
   account_type := COALESCE(NEW.raw_user_meta_data ->> 'account_type', 'user');
   user_full_name := NEW.raw_user_meta_data ->> 'full_name';
   user_biz_name := NEW.raw_user_meta_data ->> 'business_name';
