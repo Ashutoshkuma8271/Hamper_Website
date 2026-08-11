@@ -27,7 +27,7 @@ export default function Footer() {
   };
 
   return (
-    <footer className="bg-[#140609] text-white border-t-2 border-[#b3864a]/40 relative font-sans">
+    <footer role="contentinfo" aria-label="Site Footer" className="bg-[#140609] text-white border-t-2 border-[#b3864a]/40 relative font-sans">
       {/* Top Features Strip */}
       <div className="border-b border-[#b3864a]/20 bg-[#1e0a0f] py-8 px-4 sm:px-6">
         <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 text-center md:text-left">

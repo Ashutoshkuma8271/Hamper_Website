@@ -46,13 +46,14 @@ export default function Navbar() {
 
   return (
     <header
+      role="banner"
       className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
         scrolled
           ? 'bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm dark:bg-gray-900/95 dark:border-gray-700'
           : 'bg-white/95 backdrop-blur-md border-b border-gray-100 dark:bg-gray-900/95 dark:border-gray-800'
       }`}
     >
-      <nav className="mx-auto flex h-[4.5rem] max-w-7xl items-center gap-5 px-4 sm:px-6 lg:px-8">
+      <nav role="navigation" aria-label="Main Navigation" className="mx-auto flex h-[4.5rem] max-w-7xl items-center gap-5 px-4 sm:px-6 lg:px-8">
         <Link to="/" className="shrink-0 font-display text-xl font-bold tracking-tight text-wine-800 transition-colors hover:text-wine-600 dark:text-cream-50 dark:hover:text-gold-300" aria-label="A_S Hamper home">
           A_S Hamper
         </Link>
