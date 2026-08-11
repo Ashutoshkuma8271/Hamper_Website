@@ -64,7 +64,7 @@ export default function VendorPage() {
               Vendor Authorization Required
             </h2>
             <p className="text-sm text-amber-800/80 dark:text-amber-200/80 max-w-md mx-auto">
-              You are currently signed in as a <strong className="capitalize">{profile?.role || 'Customer'}</strong> ({session.user.email}). Only verified Vendor accounts can access and manage the Vendor Zone.
+              You are currently signed in as a <strong className="capitalize">{profile?.role || 'Customer'}</strong> ({session?.user?.email}). Only verified Vendor accounts can access and manage the Vendor Zone.
             </p>
             <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
               <button
