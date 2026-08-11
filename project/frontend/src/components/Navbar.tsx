@@ -102,8 +102,12 @@ export default function Navbar() {
           </Link>
           
           {session ? (
-            <Link to="/profile" className="hidden sm:flex items-center justify-center h-10 w-10 rounded-full bg-wine-600 text-white text-sm font-semibold" aria-label="Account" title={profile?.business_name || 'Account'}>
-              {(profile?.business_name || session.user.email || 'A').charAt(0).toUpperCase()}
+            <Link to="/profile" className="hidden sm:flex items-center justify-center h-10 w-10 rounded-full bg-wine-600 text-white text-sm font-semibold overflow-hidden ring-2 ring-gold-400/40" aria-label="Account" title={profile?.full_name || profile?.business_name || 'Account'}>
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="Account" className="h-full w-full object-cover" />
+              ) : (
+                (profile?.full_name || profile?.business_name || session.user.email || 'A').charAt(0).toUpperCase()
+              )}
             </Link>
           ) : (
             <Link to="/profile" className="hidden sm:flex items-center justify-center h-10 w-10 rounded-full text-gray-600 hover:bg-gray-100 transition-colors dark:text-gray-300 dark:hover:bg-gray-800" aria-label="Sign in">

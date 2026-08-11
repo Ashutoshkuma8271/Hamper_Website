@@ -55,8 +55,12 @@ export default function AdminDashboard() {
     <div className="mx-auto my-8 max-w-7xl rounded-3xl bg-cream-50 ring-1 ring-cream-200 overflow-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 sm:p-8 border-b border-cream-200 bg-cream-100/40">
         <div className="flex items-center gap-3">
-          <span className="grid place-items-center h-11 w-11 rounded-full bg-wine-700 text-cream-50">
-            <ShoppingBag className="h-5 w-5" />
+          <span className="grid place-items-center h-12 w-12 rounded-full bg-wine-700 text-cream-50 overflow-hidden ring-2 ring-gold-400/40">
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt="Admin Avatar" className="h-full w-full object-cover" />
+            ) : (
+              <ShoppingBag className="h-5 w-5 text-gold-300" />
+            )}
           </span>
           <div>
             <h3 className="font-display text-xl sm:text-2xl font-semibold text-wine-700">

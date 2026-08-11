@@ -21,6 +21,7 @@ export type Profile = {
   shop_no: string | null;
   gst_no: string | null;
   phone: string | null;
+  avatar_url?: string | null;
   admin_requested?: boolean;
   created_at: string;
 };

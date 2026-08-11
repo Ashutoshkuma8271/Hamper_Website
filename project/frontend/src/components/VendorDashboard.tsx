@@ -13,6 +13,7 @@ import { formatPrice } from '@/cart';
 import HamperBuilder from './HamperBuilder';
 import HamperPreviewModal from './HamperPreviewModal';
 import HamperDetailModal from './HamperDetailModal';
+import ProfileSection from './ProfileSection';
 import {
   Store,
   Package,
@@ -1004,44 +1005,8 @@ export default function VendorDashboard({
 
         {/* Tab 9: Profile / Business Details */}
         {activeTab === 'profile' && (
-          <div className="max-w-2xl mx-auto rounded-2xl bg-cream-100/50 p-6 sm:p-8 ring-1 ring-cream-200 dark:bg-gray-800 dark:ring-gray-700 space-y-6">
-            <div className="flex items-center gap-3">
-              <span className="grid place-items-center h-12 w-12 rounded-full bg-wine-700 text-gold-300">
-                <Store className="h-6 w-6" />
-              </span>
-              <div>
-                <h3 className="font-display text-xl font-semibold text-wine-800 dark:text-white">
-                  {vendorName}
-                </h3>
-                <p className="text-xs text-ink-700/60 dark:text-gray-400">
-                  Registered Gifting Partner Profile
-                </p>
-              </div>
-            </div>
-
-            <div className="grid sm:grid-cols-2 gap-4 text-xs">
-              <div className="rounded-xl bg-cream-50 p-3.5 ring-1 ring-cream-200 dark:bg-gray-900">
-                <span className="text-ink-700/50 block text-[11px]">Shop Number</span>
-                <span className="font-bold text-wine-800 dark:text-white">{vendorShopNo}</span>
-              </div>
-
-              <div className="rounded-xl bg-cream-50 p-3.5 ring-1 ring-cream-200 dark:bg-gray-900">
-                <span className="text-ink-700/50 block text-[11px]">GST Number</span>
-                <span className="font-bold text-wine-800 dark:text-white">29ABCDE1234F1Z5</span>
-              </div>
-
-              <div className="rounded-xl bg-cream-50 p-3.5 ring-1 ring-cream-200 dark:bg-gray-900">
-                <span className="text-ink-700/50 block text-[11px]">Contact Phone</span>
-                <span className="font-bold text-wine-800 dark:text-white">+91 98765 43210</span>
-              </div>
-
-              <div className="rounded-xl bg-cream-50 p-3.5 ring-1 ring-cream-200 dark:bg-gray-900">
-                <span className="text-ink-700/50 block text-[11px]">Vendor Email</span>
-                <span className="font-bold text-wine-800 dark:text-white">
-                  {session?.user?.email || 'vendor@asgifting.in'}
-                </span>
-              </div>
-            </div>
+          <div className="max-w-3xl mx-auto space-y-6 font-sans">
+            <ProfileSection />
           </div>
         )}
       </div>
