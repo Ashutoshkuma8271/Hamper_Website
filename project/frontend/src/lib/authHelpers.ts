@@ -41,6 +41,10 @@ export async function triggerGoogleSignIn(
   intendedRole: AccountRole,
   redirectPath = '/profile'
 ): Promise<void> {
+  if (intendedRole === 'admin') {
+    throw new Error('Google Sign-In is disabled for Admin accounts. Please sign in using your Admin email and password credentials.');
+  }
+
   if (!supabase) {
     throw new Error('Authentication is not configured. Please check environment variables.');
   }
