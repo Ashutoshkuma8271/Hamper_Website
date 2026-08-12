@@ -197,12 +197,15 @@ export default function VendorDashboard({
               <h1 className="font-display text-2xl font-semibold text-wine-800 dark:text-white">
                 {vendorName}
               </h1>
+              <span className="rounded-full bg-wine-600 px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm">
+                Vendor Studio Access
+              </span>
               <span className="rounded-full bg-sage-500/15 px-2.5 py-0.5 text-[11px] font-bold text-sage-600">
                 GST Ready
               </span>
             </div>
             <p className="text-xs text-ink-700/60 dark:text-gray-400">
-              Shop #{vendorShopNo} · Vendor Portal & Gifting Studio
+              Shop #{vendorShopNo} · Vendor Portal &amp; Gifting Studio · <span className="text-wine-700 dark:text-gold-300 font-medium">To shop as a customer, please log in with a customer account.</span>
             </p>
           </div>
         </div>

@@ -103,7 +103,16 @@ export default function Navbar() {
           </Link>
           
           {session ? (
-            <Link to="/profile" className="hidden sm:flex items-center justify-center h-10 w-10 rounded-full bg-wine-600 text-white text-sm font-semibold overflow-hidden ring-2 ring-gold-400/40" aria-label="Account" title={profile?.full_name || profile?.business_name || 'Account'}>
+            <Link
+              to={profile?.role === 'vendor' ? '/vendor' : isAdmin ? '/admin' : '/profile'}
+              className="hidden sm:flex items-center justify-center h-10 w-10 rounded-full bg-wine-600 text-white text-sm font-semibold overflow-hidden ring-2 ring-gold-400/40 hover:ring-gold-400 transition-all"
+              aria-label="Account"
+              title={
+                profile?.role === 'vendor'
+                  ? `Vendor Studio (${profile?.business_name || session.user.email})`
+                  : profile?.full_name || 'Account'
+              }
+            >
               {profile?.avatar_url ? (
                 <img src={profile.avatar_url} alt="Account" className="h-full w-full object-cover" />
               ) : (
