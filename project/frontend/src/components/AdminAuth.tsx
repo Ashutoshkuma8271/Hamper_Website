@@ -137,8 +137,9 @@ export default function AdminAuth() {
           throw new Error('An account with this email already exists. Please log in instead.');
         }
 
-        // Open 6-digit Gmail OTP verification screen
-        setShowOtpModal(true);
+        sessionStorage.setItem('a_s_hamper_verify_email', cleanEmail);
+        sessionStorage.setItem('a_s_hamper_verify_role', 'admin');
+        navigate(`/verify-email?email=${encodeURIComponent(cleanEmail)}&role=admin`);
       } else {
         // --- 2. DEDICATED ADMIN LOGIN FLOW ---
         const { data, error: signInError } = await supabase.auth.signInWithPassword({
@@ -148,13 +149,6 @@ export default function AdminAuth() {
 
         if (signInError) throw signInError;
 
-        // Check if email is verified
-        if (!data.user.email_confirmed_at) {
-          setShowOtpModal(true);
-          setLoading(false);
-          return;
-        }
-
         // Fetch server-side role and account status from database
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
@@ -163,6 +157,15 @@ export default function AdminAuth() {
           .maybeSingle();
 
         if (profileError) throw profileError;
+
+        // Check if email is verified
+        if (!data.user.email_confirmed_at && !profile?.email_verified) {
+          await supabase.auth.signOut();
+          sessionStorage.setItem('a_s_hamper_verify_email', cleanEmail);
+          sessionStorage.setItem('a_s_hamper_verify_role', 'admin');
+          navigate(`/verify-email?email=${encodeURIComponent(cleanEmail)}&role=admin`);
+          return;
+        }
 
         if (profile?.role !== 'admin') {
           await supabase.auth.signOut();

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Store, Mail, Lock, UserRound, Phone, FileText, Hash, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
 import { checkRoleCollision, triggerGoogleSignIn, validateSessionRole } from '@/lib/authHelpers';
 import { validatePhoneNumber, validateEmailFormat, sanitizeInput } from '@/lib/security';
@@ -12,6 +12,7 @@ import OtpVerificationModal from '@/components/OtpVerificationModal';
 type Mode = 'login' | 'signup';
 
 export default function VendorAuth() {
+  const navigate = useNavigate();
   const { session, profile } = useAuth();
   const [mode, setMode] = useState<Mode>('signup');
   const [loading, setLoading] = useState(false);
@@ -141,17 +142,28 @@ export default function VendorAuth() {
           },
         });
         if (error) throw error;
-        setShowOtpModal(true);
+        sessionStorage.setItem('a_s_hamper_verify_email', email);
+        sessionStorage.setItem('a_s_hamper_verify_role', 'vendor');
+        navigate(`/verify-email?email=${encodeURIComponent(email)}&role=vendor`);
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
 
-        // Verify role is vendor
+        // Verify email confirmation status
+        const isEmailConfirmed = !!(data.user.email_confirmed_at);
         const { data: prof } = await supabase
           .from('profiles')
-          .select('role')
+          .select('role, email_verified')
           .eq('id', data.user.id)
           .maybeSingle();
+
+        if (!isEmailConfirmed && !prof?.email_verified) {
+          await supabase.auth.signOut();
+          sessionStorage.setItem('a_s_hamper_verify_email', email);
+          sessionStorage.setItem('a_s_hamper_verify_role', 'vendor');
+          navigate(`/verify-email?email=${encodeURIComponent(email)}&role=vendor`);
+          return;
+        }
 
         if (prof?.role && prof.role !== 'vendor') {
           await supabase.auth.signOut();

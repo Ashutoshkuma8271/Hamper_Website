@@ -189,16 +189,30 @@ export default function UserAuth() {
           }
         }
 
-        setShowOtpModal(true);
+        sessionStorage.setItem('a_s_hamper_verify_email', email);
+        sessionStorage.setItem('a_s_hamper_verify_role', 'customer');
+        navigate(`/verify-email?email=${encodeURIComponent(email)}&role=customer`);
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+
+        // Check if email has been confirmed via OTP
+        const isEmailConfirmed = !!(data.user.email_confirmed_at);
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('role')
+          .select('role, email_verified')
           .eq('id', data.user.id)
           .maybeSingle();
+
         if (profileError) throw profileError;
+
+        if (!isEmailConfirmed && !profile?.email_verified) {
+          await supabase.auth.signOut();
+          sessionStorage.setItem('a_s_hamper_verify_email', email);
+          sessionStorage.setItem('a_s_hamper_verify_role', 'customer');
+          navigate(`/verify-email?email=${encodeURIComponent(email)}&role=customer`);
+          return;
+        }
 
         if (profile?.role && profile.role !== 'user') {
           await supabase.auth.signOut();
@@ -208,7 +222,7 @@ export default function UserAuth() {
         }
 
         void sendLoginAlert();
-        navigate(profile?.role === 'admin' ? '/admin' : profile?.role === 'vendor' ? '/vendor' : '/', { replace: true });
+        navigate('/', { replace: true });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');

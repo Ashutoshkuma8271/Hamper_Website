@@ -1,0 +1,293 @@
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { Mail, CheckCircle2, AlertCircle, Loader2, ArrowRight, ShieldCheck, RefreshCw, Lock } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'react-hot-toast';
+
+export default function VerifyEmailPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const queryEmail = searchParams.get('email') || sessionStorage.getItem('a_s_hamper_verify_email') || '';
+  const queryRole = searchParams.get('role') || sessionStorage.getItem('a_s_hamper_verify_role') || 'customer';
+
+  const [email] = useState(queryEmail);
+  const [role] = useState(queryRole);
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isVerified, setIsVerified] = useState(false);
+  const [cooldown, setCooldown] = useState(60);
+
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // 60-second Resend OTP Cooldown Timer
+  useEffect(() => {
+    let timer: any;
+    if (cooldown > 0) {
+      timer = setInterval(() => setCooldown((prev) => prev - 1), 1000);
+    }
+    return () => clearInterval(timer);
+  }, [cooldown]);
+
+  // Auto focus first OTP digit input
+  useEffect(() => {
+    if (inputRefs.current[0]) {
+      inputRefs.current[0]?.focus();
+    }
+  }, []);
+
+  const handleChangeDigit = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+
+    const newOtp = [...otp];
+    newOtp[index] = value.slice(-1);
+    setOtp(newOtp);
+    setErrorMsg(null);
+
+    // Auto-advance to next input
+    if (value && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasteData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasteData) {
+      const newOtp = [...otp];
+      for (let i = 0; i < pasteData.length; i++) {
+        newOtp[i] = pasteData[i];
+      }
+      setOtp(newOtp);
+      if (pasteData.length === 6 && inputRefs.current[5]) {
+        inputRefs.current[5]?.focus();
+      }
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (cooldown > 0 || resending || !email) return;
+
+    setResending(true);
+    setErrorMsg(null);
+
+    try {
+      if (!supabase) throw new Error('Authentication service unavailable.');
+
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim(),
+      });
+
+      if (error) throw error;
+
+      toast.success('A new 6-digit OTP code has been sent to your Gmail address!', { icon: '📧' });
+      setCooldown(60);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to resend OTP. Please try again.');
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+
+    const cleanToken = otp.join('').trim();
+    if (cleanToken.length !== 6) {
+      setErrorMsg('Please enter all 6 digits of the OTP verification code.');
+      return;
+    }
+
+    if (!email) {
+      setErrorMsg('Email address not found. Please try registering again.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      if (!supabase) throw new Error('Authentication service unavailable.');
+
+      // 1. Verify OTP token with Supabase Auth
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: email.trim(),
+        token: cleanToken,
+        type: 'signup',
+      });
+
+      if (error) {
+        // Fallback check for email confirmation
+        const { error: emailCheckErr } = await supabase.auth.verifyOtp({
+          email: email.trim(),
+          token: cleanToken,
+          type: 'email',
+        });
+
+        if (emailCheckErr) {
+          throw new Error('Invalid or expired OTP code. Please check your Gmail inbox or click Resend.');
+        }
+      }
+
+      // 2. Mark profile as email_verified in database
+      if (data?.user?.id) {
+        await supabase
+          .from('profiles')
+          .update({ email_verified: true, account_status: 'active' })
+          .eq('id', data.user.id);
+      }
+
+      // 3. Clear temporary verification storage
+      sessionStorage.removeItem('a_s_hamper_verify_email');
+      sessionStorage.removeItem('a_s_hamper_verify_role');
+
+      // 4. Sign out active session per flowchart requirement so user MUST log in explicitly
+      await supabase.auth.signOut();
+
+      setIsVerified(true);
+      toast.success('Email verified successfully!', { icon: '✅' });
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Invalid OTP code. Please check your email.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loginRoute = role === 'vendor' ? '/vendor' : role === 'admin' ? '/admin' : '/profile';
+  const roleTitle = role === 'vendor' ? 'Vendor' : role === 'admin' ? 'Admin' : 'Customer';
+
+  return (
+    <main className="min-h-screen bg-cream-50/60 dark:bg-gray-900 pt-28 pb-20 px-4 sm:px-6 lg:px-8 font-sans flex items-center justify-center transition-colors">
+      <div className="w-full max-w-md">
+        <div className="rounded-3xl border border-cream-200 bg-white p-6 sm:p-8 shadow-xl dark:border-gray-800 dark:bg-gray-800">
+          {!isVerified ? (
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="grid h-12 w-12 place-items-center rounded-2xl bg-wine-600/10 text-wine-600 dark:bg-wine-600/20 dark:text-gold-300">
+                  <Mail className="h-6 w-6" />
+                </div>
+                <div>
+                  <h1 className="font-display text-xl sm:text-2xl font-bold text-wine-800 dark:text-white">
+                    Verify Your Email
+                  </h1>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                    {roleTitle} Account Security
+                  </p>
+                </div>
+              </div>
+
+              <p className="mt-4 text-xs leading-relaxed text-gray-600 dark:text-gray-300">
+                We have sent a 6-digit verification code to <strong className="text-wine-800 dark:text-gold-300">{email || 'your Gmail address'}</strong>.
+              </p>
+
+              <form onSubmit={handleVerifyOtp} className="mt-6 space-y-5">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400 mb-2 text-center">
+                    Enter 6-Digit OTP Code
+                  </label>
+
+                  <div className="flex items-center justify-center gap-2" onPaste={handlePaste}>
+                    {otp.map((digit, idx) => (
+                      <input
+                        key={idx}
+                        ref={(el) => {
+                          inputRefs.current[idx] = el;
+                        }}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleChangeDigit(idx, e.target.value)}
+                        onKeyDown={(e) => handleKeyDown(idx, e)}
+                        className="h-12 w-11 rounded-xl border border-cream-300 bg-cream-50/50 text-center font-mono text-lg font-bold text-wine-800 outline-none focus:border-wine-600 focus:ring-2 focus:ring-wine-600/20 dark:border-gray-700 dark:bg-gray-700 dark:text-white transition-all"
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {errorMsg && (
+                  <p className="text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 p-3 rounded-xl flex items-center gap-1.5 text-center justify-center">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    {errorMsg}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading || otp.join('').length < 6}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-wine-600 py-3 text-xs font-bold text-white shadow-lg shadow-wine-600/30 transition-all hover:bg-wine-700 active:scale-95 disabled:opacity-50"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Verifying OTP...
+                    </>
+                  ) : (
+                    <>
+                      Verify OTP & Activate Account
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {/* Resend Cooldown Section */}
+              <div className="mt-6 border-t border-cream-200 dark:border-gray-700 pt-4 text-center text-xs space-y-2">
+                <p className="text-gray-500 dark:text-gray-400">Didn't receive the OTP code?</p>
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={cooldown > 0 || resending}
+                  className="inline-flex items-center gap-1.5 font-bold text-wine-600 hover:underline dark:text-gold-300 disabled:opacity-50 disabled:no-underline"
+                >
+                  {resending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  {cooldown > 0 ? `Resend OTP in ${cooldown}s` : 'Resend OTP via Gmail'}
+                </button>
+              </div>
+
+              <div className="mt-4 pt-2 flex items-center justify-center gap-1 text-[10px] text-gray-400">
+                <ShieldCheck className="h-3 w-3 text-sage-600" />
+                <span>Protected by Supabase Encrypted Gmail Verification</span>
+              </div>
+            </div>
+          ) : (
+            /* Email Verified Success State (Step 9 in Flowchart) */
+            <div className="text-center space-y-4 py-2">
+              <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-sage-500/15 text-sage-600 dark:text-sage-400">
+                <CheckCircle2 className="h-10 w-10" />
+              </div>
+
+              <h2 className="font-display text-2xl font-bold text-wine-800 dark:text-white">
+                Email Verified Successfully!
+              </h2>
+
+              <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                Your {roleTitle} account has been activated. Per security requirements, please sign in with your email and password to proceed.
+              </p>
+
+              <Link
+                to={loginRoute}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-wine-600 py-3 text-xs font-bold text-white shadow-lg shadow-wine-600/30 transition-all hover:bg-wine-700"
+              >
+                Proceed to {roleTitle} Login
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          )}
+        </div>
+      </div>
+    </main>
+  );
+}

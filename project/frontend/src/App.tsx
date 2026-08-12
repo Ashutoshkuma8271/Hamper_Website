@@ -26,6 +26,7 @@ const OrderConfirmationPage = lazy(() => import('@/pages/OrderConfirmationPage')
 const WishlistPage = lazy(() => import('@/pages/WishlistPage'));
 const ForgotPasswordPage = lazy(() => import('@/pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage'));
+const VerifyEmailPage = lazy(() => import('@/pages/VerifyEmailPage'));
 const BestSellersPage = lazy(() => import('@/pages/BestSellersPage'));
 const HowItWorksPage = lazy(() => import('@/pages/HowItWorksPage'));
 const HandPackedPage = lazy(() => import('@/pages/HandPackedPage'));
@@ -77,6 +78,7 @@ function App() {
                   <Route path="/wishlist" element={<WishlistPage />} />
                   <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                   <Route path="/reset-password" element={<ResetPasswordPage />} />
+                  <Route path="/verify-email" element={<VerifyEmailPage />} />
                   <Route path="/admin/*" element={<RouteGate admin><main className="min-h-screen px-4 pt-24 sm:px-7"><AdminDashboard /></main></RouteGate>} />
                 </Routes>
               </Suspense>
