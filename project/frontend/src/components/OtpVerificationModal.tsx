@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Mail, CheckCircle2, Loader2, ArrowRight, X, KeyRound } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { CheckCircle2, Loader2, ArrowRight, X, KeyRound, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 
@@ -7,14 +7,18 @@ interface OtpVerificationModalProps {
   isOpen: boolean;
   email: string;
   phone?: string;
+  title?: string;
   onSuccess: () => void;
   onClose: () => void;
 }
+
+const MAX_FAILED_ATTEMPTS = 5;
 
 export default function OtpVerificationModal({
   isOpen,
   email,
   phone,
+  title = 'Verify Email OTP',
   onSuccess,
   onClose,
 }: OtpVerificationModalProps) {
@@ -22,12 +26,29 @@ export default function OtpVerificationModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+
+  // Cooldown countdown timer
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => {
+      setCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
 
   if (!isOpen) return null;
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
+      setError('Too many failed attempts. Please request a new OTP code.');
+      return;
+    }
+
     setLoading(true);
 
     if (!supabase) {
@@ -70,10 +91,28 @@ export default function OtpVerificationModal({
       }
 
       if (verifyRes.error) {
-        throw new Error(verifyRes.error.message || 'Invalid or expired OTP verification code.');
+        setFailedAttempts((prev) => prev + 1);
+        const remaining = MAX_FAILED_ATTEMPTS - (failedAttempts + 1);
+        if (remaining <= 0) {
+          throw new Error('Maximum incorrect OTP attempts reached. Please click "Resend Code".');
+        }
+        throw new Error(`Invalid or expired OTP code. (${remaining} attempts remaining)`);
       }
 
-      toast.success('Account & Email verified successfully! Welcome to A_S Hamper.', { icon: '🎉' });
+      // Mark email_verified status in database if available
+      try {
+        if (verifyRes.data?.user?.id) {
+          await supabase
+            .from('profiles')
+            .update({ email_verified: true, account_status: 'active', updated_at: new Date().toISOString() })
+            .eq('id', verifyRes.data.user.id);
+        }
+      } catch (dbErr) {
+        console.warn('Profile status update error:', dbErr);
+      }
+
+      toast.success('Email & OTP verified successfully! Account is now active.', { icon: '🎉' });
+      setFailedAttempts(0);
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'OTP Verification failed.');
@@ -83,7 +122,7 @@ export default function OtpVerificationModal({
   };
 
   const handleResend = async () => {
-    if (!supabase) return;
+    if (!supabase || cooldown > 0) return;
     setResending(true);
     setError(null);
     try {
@@ -92,7 +131,9 @@ export default function OtpVerificationModal({
         email,
       });
       if (resendErr) throw resendErr;
-      toast.success(`Verification code re-sent to ${email}`, { icon: '📩' });
+      toast.success(`New 6-digit OTP re-sent to ${email}`, { icon: '📩' });
+      setCooldown(60); // 60-second cooldown guard
+      setFailedAttempts(0);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to resend code');
     } finally {
@@ -116,10 +157,10 @@ export default function OtpVerificationModal({
             <KeyRound className="h-7 w-7" />
           </span>
           <h2 className="mt-4 font-display text-2xl font-bold text-wine-800 dark:text-white">
-            Verify Email &amp; Phone OTP
+            {title}
           </h2>
           <p className="mt-2 text-xs text-ink-700/70 dark:text-gray-300 max-w-xs mx-auto">
-            We sent a 6-digit verification code to <strong className="text-wine-700 dark:text-gold-300">{email}</strong>
+            We sent a 6-digit OTP verification code to <strong className="text-wine-700 dark:text-gold-300">{email}</strong>.
             {phone && <span> and <strong className="text-wine-700 dark:text-gold-300">{phone}</strong></span>}.
           </p>
         </div>
@@ -127,7 +168,7 @@ export default function OtpVerificationModal({
         <form onSubmit={handleVerify} className="mt-6 space-y-4">
           <div>
             <label className="block text-center text-xs font-semibold text-ink-700/80 dark:text-gray-300 uppercase tracking-wider mb-2">
-              Enter 6-Digit OTP Code
+              Enter 6-Digit Gmail OTP Code
             </label>
             <input
               required
@@ -148,14 +189,14 @@ export default function OtpVerificationModal({
 
           <button
             type="submit"
-            disabled={loading || otpToken.length !== 6}
+            disabled={loading || otpToken.length !== 6 || failedAttempts >= MAX_FAILED_ATTEMPTS}
             className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-wine-600 py-3.5 text-sm font-semibold text-white shadow-md hover:bg-wine-700 disabled:opacity-60 transition-all"
           >
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <>
-                Verify &amp; Create Account
+                Verify OTP &amp; Activate Account
                 <ArrowRight className="h-4 w-4" />
               </>
             )}
@@ -167,10 +208,14 @@ export default function OtpVerificationModal({
           <button
             type="button"
             onClick={handleResend}
-            disabled={resending}
-            className="font-bold text-wine-700 hover:underline dark:text-gold-300"
+            disabled={resending || cooldown > 0}
+            className="font-bold text-wine-700 hover:underline disabled:opacity-50 dark:text-gold-300"
           >
-            {resending ? 'Sending...' : 'Resend Code'}
+            {resending
+              ? 'Sending...'
+              : cooldown > 0
+              ? `Resend Code in ${cooldown}s`
+              : 'Resend Code'}
           </button>
         </div>
       </div>
