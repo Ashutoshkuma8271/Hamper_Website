@@ -13,7 +13,7 @@ export default function VerifyEmailPage() {
 
   const [email] = useState(queryEmail);
   const [role] = useState(queryRole);
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [otp, setOtp] = useState(['', '', '', '', '', '', '', '']); // Supports up to 8-digit OTP
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -47,7 +47,7 @@ export default function VerifyEmailPage() {
     setErrorMsg(null);
 
     // Auto-advance to next input
-    if (value && index < 5) {
+    if (value && index < 7) {
       inputRefs.current[index + 1]?.focus();
     }
   };
@@ -60,15 +60,16 @@ export default function VerifyEmailPage() {
 
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
-    const pasteData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    const pasteData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 8);
     if (pasteData) {
-      const newOtp = [...otp];
+      const newOtp = ['', '', '', '', '', '', '', ''];
       for (let i = 0; i < pasteData.length; i++) {
         newOtp[i] = pasteData[i];
       }
       setOtp(newOtp);
-      if (pasteData.length === 6 && inputRefs.current[5]) {
-        inputRefs.current[5]?.focus();
+      const focusIndex = Math.min(pasteData.length, 7);
+      if (inputRefs.current[focusIndex]) {
+        inputRefs.current[focusIndex]?.focus();
       }
     }
   };
@@ -94,7 +95,7 @@ export default function VerifyEmailPage() {
         throw error;
       }
 
-      toast.success('A new 6-digit OTP code has been dispatched to your Gmail address!', { icon: '📧' });
+      toast.success('A new OTP verification code has been dispatched to your Gmail address!', { icon: '📧' });
       setCooldown(60);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to resend OTP. Please check your Gmail Spam folder.');
@@ -108,8 +109,8 @@ export default function VerifyEmailPage() {
     setErrorMsg(null);
 
     const cleanToken = otp.join('').trim();
-    if (cleanToken.length !== 6) {
-      setErrorMsg('Please enter all 6 digits of the OTP verification code.');
+    if (cleanToken.length < 6 || cleanToken.length > 8) {
+      setErrorMsg('Please enter a valid 6-digit or 8-digit OTP verification code.');
       return;
     }
 
@@ -183,6 +184,7 @@ export default function VerifyEmailPage() {
 
   const loginRoute = role === 'vendor' ? '/vendor' : role === 'admin' ? '/admin' : '/profile';
   const roleTitle = role === 'vendor' ? 'Vendor' : role === 'admin' ? 'Admin' : 'Customer';
+  const filledDigitsCount = otp.join('').trim().length;
 
   return (
     <main className="min-h-screen bg-cream-50/60 dark:bg-gray-900 pt-28 pb-20 px-4 sm:px-6 lg:px-8 font-sans flex items-center justify-center transition-colors">
@@ -205,16 +207,16 @@ export default function VerifyEmailPage() {
               </div>
 
               <p className="mt-4 text-xs leading-relaxed text-gray-600 dark:text-gray-300">
-                We have sent a 6-digit verification code to <strong className="text-wine-800 dark:text-gold-300">{email || 'your Gmail address'}</strong>.
+                We have sent an OTP verification code to <strong className="text-wine-800 dark:text-gold-300">{email || 'your Gmail address'}</strong>.
               </p>
 
               <form onSubmit={handleVerifyOtp} className="mt-6 space-y-5">
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400 mb-2 text-center">
-                    Enter 6-Digit OTP Code
+                    Enter OTP Code (6 to 8 Digits)
                   </label>
 
-                  <div className="flex items-center justify-center gap-2" onPaste={handlePaste}>
+                  <div className="flex items-center justify-center gap-1.5 sm:gap-2" onPaste={handlePaste}>
                     {otp.map((digit, idx) => (
                       <input
                         key={idx}
@@ -227,7 +229,7 @@ export default function VerifyEmailPage() {
                         value={digit}
                         onChange={(e) => handleChangeDigit(idx, e.target.value)}
                         onKeyDown={(e) => handleKeyDown(idx, e)}
-                        className="h-12 w-11 rounded-xl border border-cream-300 bg-cream-50/50 text-center font-mono text-lg font-bold text-wine-800 outline-none focus:border-wine-600 focus:ring-2 focus:ring-wine-600/20 dark:border-gray-700 dark:bg-gray-700 dark:text-white transition-all"
+                        className="h-11 w-9 sm:h-12 sm:w-10 rounded-xl border border-cream-300 bg-cream-50/50 text-center font-mono text-base sm:text-lg font-bold text-wine-800 outline-none focus:border-wine-600 focus:ring-2 focus:ring-wine-600/20 dark:border-gray-700 dark:bg-gray-700 dark:text-white transition-all"
                       />
                     ))}
                   </div>
@@ -242,7 +244,7 @@ export default function VerifyEmailPage() {
 
                 <button
                   type="submit"
-                  disabled={loading || otp.join('').length < 6}
+                  disabled={loading || filledDigitsCount < 6}
                   className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-wine-600 py-3 text-xs font-bold text-white shadow-lg shadow-wine-600/30 transition-all hover:bg-wine-700 active:scale-95 disabled:opacity-50"
                 >
                   {loading ? (
@@ -251,25 +253,27 @@ export default function VerifyEmailPage() {
                     </>
                   ) : (
                     <>
-                      Verify OTP & Activate Account
+                      Verify OTP &amp; Activate Account
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}
                 </button>
               </form>
 
-              {/* Resend Cooldown Section */}
+              {/* Resend Cooldown & Troubleshooting Section */}
               <div className="mt-6 border-t border-cream-200 dark:border-gray-700 pt-4 text-center text-xs space-y-3">
-                <div className="rounded-2xl bg-amber-500/10 border border-amber-500/30 p-3.5 text-left text-[11px] text-amber-900 dark:text-amber-200 space-y-1">
+                <div className="rounded-2xl bg-amber-500/10 border border-amber-500/30 p-3.5 text-left text-[11px] text-amber-900 dark:text-amber-200 space-y-1.5">
                   <p className="font-bold flex items-center gap-1.5 text-wine-800 dark:text-gold-300">
                     <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
-                    Not seeing the OTP email in your inbox?
+                    Receiving 8-digit OTP instead of 6-digit OTP?
                   </p>
-                  <ul className="list-disc list-inside space-y-1 text-gray-600 dark:text-gray-300 text-[11px] pl-1">
-                    <li>Check your Gmail <strong>Spam / Junk</strong> folder.</li>
-                    <li>Verify your registered email address: <strong className="text-wine-700 dark:text-gold-300">{email || 'your email'}</strong>.</li>
-                    <li>If using default Supabase SMTP, standard limit is 3-4 emails/hour. Enable Custom Gmail SMTP in Supabase Dashboard for unlimited instant emails.</li>
-                  </ul>
+                  <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">
+                    Our form accepts both 6-digit and 8-digit OTP codes! If you want Supabase to always generate 6-digit codes:
+                  </p>
+                  <ol className="list-decimal list-inside space-y-0.5 text-gray-600 dark:text-gray-300 text-[10.5px] pl-1 font-medium">
+                    <li>Go to <strong>Supabase Dashboard</strong> → <strong>Authentication</strong> → <strong>Provider Settings</strong> → <strong>Email</strong>.</li>
+                    <li>Set <strong>OTP Length</strong> to <strong>6</strong> and save.</li>
+                  </ol>
                 </div>
 
                 <p className="text-gray-500 dark:text-gray-400">Didn't receive the OTP code?</p>
@@ -294,7 +298,7 @@ export default function VerifyEmailPage() {
               </div>
             </div>
           ) : (
-            /* Email Verified Success State (Step 9 in Flowchart) */
+            /* Email Verified Success State */
             <div className="text-center space-y-4 py-2">
               <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-sage-500/15 text-sage-600 dark:text-sage-400">
                 <CheckCircle2 className="h-10 w-10" />

@@ -58,8 +58,8 @@ export default function OtpVerificationModal({
     }
 
     const cleanToken = otpToken.trim();
-    if (cleanToken.length !== 6 || !/^\d{6}$/.test(cleanToken)) {
-      setError('Please enter a valid 6-digit numeric OTP code.');
+    if (cleanToken.length < 6 || cleanToken.length > 8 || !/^\d{6,8}$/.test(cleanToken)) {
+      setError('Please enter a valid numeric OTP code (6 to 8 digits).');
       setLoading(false);
       return;
     }
@@ -168,16 +168,16 @@ export default function OtpVerificationModal({
         <form onSubmit={handleVerify} className="mt-6 space-y-4">
           <div>
             <label className="block text-center text-xs font-semibold text-ink-700/80 dark:text-gray-300 uppercase tracking-wider mb-2">
-              Enter 6-Digit Gmail OTP Code
+              Enter Gmail OTP Verification Code
             </label>
             <input
               required
               type="text"
-              maxLength={6}
+              maxLength={8}
               value={otpToken}
-              onChange={(e) => setOtpToken(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              placeholder="000000"
-              className="w-full text-center tracking-[0.4em] font-mono text-2xl font-bold rounded-2xl border-2 border-wine-600/40 bg-white py-3 text-wine-800 outline-none focus:border-wine-600 dark:border-gold-500/50 dark:bg-gray-700 dark:text-white"
+              onChange={(e) => setOtpToken(e.target.value.replace(/\D/g, '').slice(0, 8))}
+              placeholder="Enter OTP code"
+              className="w-full text-center tracking-[0.3em] font-mono text-2xl font-bold rounded-2xl border-2 border-wine-600/40 bg-white py-3 text-wine-800 outline-none focus:border-wine-600 dark:border-gold-500/50 dark:bg-gray-700 dark:text-white"
             />
           </div>
 
@@ -189,7 +189,7 @@ export default function OtpVerificationModal({
 
           <button
             type="submit"
-            disabled={loading || otpToken.length !== 6 || failedAttempts >= MAX_FAILED_ATTEMPTS}
+            disabled={loading || otpToken.length < 6 || failedAttempts >= MAX_FAILED_ATTEMPTS}
             className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-wine-600 py-3.5 text-sm font-semibold text-white shadow-md hover:bg-wine-700 disabled:opacity-60 transition-all"
           >
             {loading ? (
