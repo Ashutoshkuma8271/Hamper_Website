@@ -29,6 +29,7 @@ import { supabase } from '@/lib/supabase';
 import { openRazorpayCheckout } from '@/lib/razorpay';
 import RazorpayModal from '@/components/RazorpayModal';
 import { getWalletBalance, deductWalletBalance, subscribeToRealtimeWallet } from '@/lib/orderSync';
+import CheckoutAuthModal from '@/components/CheckoutAuthModal';
 
 type Address = {
   id: string;
@@ -130,9 +131,14 @@ export default function CheckoutPage() {
   const [placingOrder, setPlacingOrder] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
 
-  // Refund Wallet State
-  const [walletBalance, setWalletBalance] = useState<number>(0);
-  const [useWalletBalance, setUseWalletBalance] = useState<boolean>(false);
+  // Checkout Auth Modal state
+  const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!session) {
+      setShowAuthModal(true);
+    }
+  }, [session]);
 
   // Load user profile & wallet details if logged in
   useEffect(() => {
@@ -404,6 +410,33 @@ export default function CheckoutPage() {
         <div className="grid gap-8 lg:grid-cols-12 lg:items-start">
           {/* LEFT COLUMN: Checkout Form Sections */}
           <div className="lg:col-span-7 space-y-6">
+
+            {/* Express Checkout Account Banner for Guest Users */}
+            {!session && (
+              <div className="rounded-3xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/50 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <span className="grid place-items-center h-10 w-10 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 shrink-0">
+                    <User className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <h3 className="font-display text-sm font-bold text-amber-900 dark:text-amber-100">
+                      Express Checkout Account
+                    </h3>
+                    <p className="text-xs text-amber-800/80 dark:text-amber-200/80">
+                      Sign in or register to save addresses, earn wallet rewards &amp; track your order live.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAuthModal(true)}
+                  className="shrink-0 rounded-full bg-wine-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-wine-700 transition-all shadow-md"
+                >
+                  Sign In / Register
+                </button>
+              </div>
+            )}
+
             {/* 1. Customer Information Section */}
             <div className="rounded-3xl border border-cream-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
               <div className="flex items-center justify-between border-b border-cream-200 dark:border-gray-700 pb-3">
@@ -415,12 +448,13 @@ export default function CheckoutPage() {
                     <CheckCircle2 className="h-3.5 w-3.5" /> Logged In
                   </span>
                 ) : (
-                  <Link
-                    to="/profile"
+                  <button
+                    type="button"
+                    onClick={() => setShowAuthModal(true)}
                     className="text-xs font-semibold text-wine-600 dark:text-gold-300 underline"
                   >
                     Log in for faster checkout
-                  </Link>
+                  </button>
                 )}
               </div>
 
@@ -994,6 +1028,12 @@ export default function CheckoutPage() {
           <ArrowRight className="h-4 w-4" />
         </button>
       </div>
+
+      <CheckoutAuthModal
+        isOpen={showAuthModal && !session}
+        onClose={() => setShowAuthModal(false)}
+        onContinueAsGuest={() => setShowAuthModal(false)}
+      />
     </main>
   );
 }
