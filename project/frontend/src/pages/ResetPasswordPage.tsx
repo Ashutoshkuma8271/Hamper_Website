@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
   Lock,
   Eye,
@@ -13,9 +13,12 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { isStrongPassword } from '@/components/PasswordField';
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedRole = searchParams.get('role') || 'user';
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -26,16 +29,16 @@ export default function ResetPasswordPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
   const [tokenExpired, setTokenExpired] = useState(false);
-  const [userRole, setUserRole] = useState<'customer' | 'vendor' | 'admin'>('customer');
+  const [userRole, setUserRole] = useState<'customer' | 'vendor' | 'admin'>(
+    requestedRole === 'vendor' ? 'vendor' : requestedRole === 'admin' ? 'admin' : 'customer'
+  );
 
-  // Verify recovery session or hash tokens upon page mount (Requirements 4 & 14)
   useEffect(() => {
     let mounted = true;
 
     async function checkRecoverySession() {
       if (!supabase) return;
 
-      // Supabase places access_token in location.hash or session
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const accessToken = hashParams.get('access_token');
       const type = hashParams.get('type');
@@ -44,17 +47,15 @@ export default function ResetPasswordPage() {
       const currentSession = data?.session;
 
       if (!currentSession && !accessToken && type !== 'recovery') {
-        // Fallback check: if hash params or session aren't present
-        const searchParams = new URLSearchParams(window.location.search);
-        if (!searchParams.get('code') && !searchParams.get('token')) {
+        const queryParams = new URLSearchParams(window.location.search);
+        if (!queryParams.get('code') && !queryParams.get('token')) {
           if (mounted) setTokenExpired(true);
           return;
         }
       }
 
-      // Check role of current user if logged in
       if (currentSession?.user) {
-        const metadataRole = currentSession.user.user_metadata?.role;
+        const metadataRole = currentSession.user.user_metadata?.account_type || currentSession.user.user_metadata?.role;
         if (metadataRole === 'admin') setUserRole('admin');
         else if (metadataRole === 'vendor') setUserRole('vendor');
         else setUserRole('customer');
@@ -63,13 +64,12 @@ export default function ResetPasswordPage() {
 
     checkRecoverySession();
 
-    // Listen for auth state change recovery event
     const { data: authListener } = supabase?.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         setTokenExpired(false);
       }
       if (session?.user) {
-        const role = session.user.user_metadata?.role;
+        const role = session.user.user_metadata?.account_type || session.user.user_metadata?.role;
         if (role === 'admin') setUserRole('admin');
         else if (role === 'vendor') setUserRole('vendor');
         else setUserRole('customer');
@@ -82,7 +82,7 @@ export default function ResetPasswordPage() {
     };
   }, []);
 
-  // Password Strength Checklist Checks (Requirement 9)
+  // Password Strength Checks
   const hasMinLength = password.length >= 8;
   const hasUppercase = /[A-Z]/.test(password);
   const hasLowercase = /[a-z]/.test(password);
@@ -102,33 +102,49 @@ export default function ResetPasswordPage() {
     }
 
     if (!passwordsMatch) {
-      setErrorMsg('Passwords do not match.');
+      setErrorMsg('Password and Confirm Password do not match.');
       return;
     }
 
     setLoading(true);
 
     try {
-      if (supabase) {
-        const { error } = await supabase.auth.updateUser({
-          password: password.trim(),
-        });
+      if (!supabase) {
+        setErrorMsg('Authentication service unavailable.');
+        setLoading(false);
+        return;
+      }
 
-        if (error) {
-          console.error('Supabase password update error:', error);
-          setErrorMsg(error.message || 'Could not update password. Please try again.');
-          if (error.message.toLowerCase().includes('expire') || error.message.toLowerCase().includes('invalid')) {
-            setTokenExpired(true);
-          }
+      const cleanPassword = password.trim();
+
+      const { error } = await supabase.auth.updateUser({
+        password: cleanPassword,
+      });
+
+      if (error) {
+        const msg = error.message.toLowerCase();
+        // Server-side / Supabase previous password reuse detection check
+        if (
+          msg.includes('same') ||
+          msg.includes('previous') ||
+          msg.includes('old') ||
+          msg.includes('different') ||
+          msg.includes('reuse')
+        ) {
+          setErrorMsg('You cannot use your previous password. Please create a different password.');
+        } else if (msg.includes('expire') || msg.includes('invalid') || msg.includes('session')) {
+          setErrorMsg('Password reset link expired or invalid. Please request a new link.');
+          setTokenExpired(true);
         } else {
-          setIsSuccess(true);
+          setErrorMsg(error.message || 'Could not update password. Please try again.');
         }
       } else {
+        // Invalidate recovery session so user MUST log in explicitly with the new password
+        await supabase.auth.signOut();
         setIsSuccess(true);
       }
     } catch (err: any) {
-      console.error('Password update exception:', err);
-      setErrorMsg('An unexpected error occurred. Please request a new reset link.');
+      setErrorMsg('An unexpected error occurred. Please request a new password reset link.');
     } finally {
       setLoading(false);
     }
@@ -144,7 +160,6 @@ export default function ResetPasswordPage() {
     }
   };
 
-  // Expired / Invalid Token Screen (Requirement 14)
   if (tokenExpired) {
     return (
       <main className="min-h-screen bg-cream-50/60 dark:bg-gray-900 pt-28 pb-20 px-4 font-sans flex items-center justify-center">
@@ -153,14 +168,14 @@ export default function ResetPasswordPage() {
             <AlertCircle className="h-8 w-8" />
           </div>
           <h1 className="mt-4 font-display text-xl font-bold text-wine-800 dark:text-white">
-            Reset link expired or invalid
+            Reset Link Expired or Invalid
           </h1>
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-            This password reset link is no longer valid. Please request a new password reset link.
+            This password reset link has expired or has already been used. Please request a new password reset link.
           </p>
 
           <Link
-            to="/forgot-password"
+            to={`/forgot-password?role=${userRole}`}
             className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-wine-600 px-6 py-3 text-xs font-bold text-white shadow hover:bg-wine-700 w-full"
           >
             Request New Reset Link
@@ -184,8 +199,8 @@ export default function ResetPasswordPage() {
                   <h1 className="font-display text-xl sm:text-2xl font-bold text-wine-800 dark:text-white">
                     Create New Password
                   </h1>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                    Enter a new password for your account
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium capitalize">
+                    {userRole} Account Security
                   </p>
                 </div>
               </div>
@@ -244,10 +259,10 @@ export default function ResetPasswordPage() {
                   )}
                 </div>
 
-                {/* Dynamic Password Strength Checklist (Requirement 9) */}
+                {/* Dynamic Password Requirements Checklist */}
                 <div className="rounded-2xl bg-cream-100/70 p-3.5 border border-cream-200 dark:bg-gray-700/50 dark:border-gray-600 space-y-1.5 text-xs">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-1">
-                    Password must contain:
+                    Password Security Requirements:
                   </p>
                   <div className="grid grid-cols-2 gap-1 text-[11px]">
                     <span className={`flex items-center gap-1 font-semibold ${hasMinLength ? 'text-sage-600 dark:text-sage-400' : 'text-gray-400'}`}>
@@ -270,7 +285,7 @@ export default function ResetPasswordPage() {
                 </div>
 
                 {errorMsg && (
-                  <p className="text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 p-2.5 rounded-xl flex items-center gap-1.5">
+                  <p className="text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 p-3 rounded-xl flex items-center gap-1.5">
                     <AlertCircle className="h-4 w-4 shrink-0" />
                     {errorMsg}
                   </p>
@@ -292,31 +307,31 @@ export default function ResetPasswordPage() {
               </form>
             </div>
           ) : (
-            /* Success After Reset (Requirement 13) */
+            /* Success After Password Reset */
             <div className="text-center space-y-4 py-2">
               <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-sage-500/15 text-sage-600 dark:text-sage-400">
                 <CheckCircle2 className="h-8 w-8" />
               </div>
 
               <h2 className="font-display text-xl font-bold text-wine-800 dark:text-white">
-                Password Updated Successfully
+                Password Reset Successful!
               </h2>
 
               <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
-                Your password has been changed successfully. You can now log in using your new password.
+                Your password has been changed successfully. The previous reset link has been invalidated. Please log in with your newly created password.
               </p>
 
               <button
                 onClick={handleContinueToLogin}
                 className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-wine-600 py-3 text-xs font-bold text-white shadow-lg shadow-wine-600/30 transition-all hover:bg-wine-700"
               >
-                Continue to Login
+                Log In as {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
                 <ArrowRight className="h-4 w-4" />
               </button>
 
               <div className="pt-2 flex items-center justify-center gap-1 text-[10px] text-gray-400">
                 <ShieldCheck className="h-3 w-3 text-sage-600" />
-                <span>Account Secured with Supabase Authentication</span>
+                <span>Protected by Supabase Encrypted Authentication</span>
               </div>
             </div>
           )}

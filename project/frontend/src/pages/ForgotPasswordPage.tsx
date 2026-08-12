@@ -1,62 +1,80 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Mail, ArrowLeft, Loader2, CheckCircle2, AlertCircle, Lock, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { validateEmailFormat } from '@/lib/security';
 
 export default function ForgotPasswordPage() {
+  const [searchParams] = useSearchParams();
+  const requestedRole = searchParams.get('role') || 'user'; // 'vendor' | 'admin' | 'user'
+
   const [email, setEmail] = useState('');
-  const [emailError, setEmailError] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  const validateEmail = (val: string): boolean => {
-    if (!val.trim()) {
-      setEmailError('Please enter your email address.');
-      return false;
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(val.trim())) {
-      setEmailError('Please enter a valid email address.');
-      return false;
-    }
-    setEmailError(null);
-    return true;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateEmail(email)) return;
+    setErrorMsg(null);
+
+    const cleanEmail = email.trim();
+    if (!validateEmailFormat(cleanEmail)) {
+      setErrorMsg('Please enter a valid email address.');
+      return;
+    }
 
     setLoading(true);
 
     try {
-      if (supabase) {
-        const redirectUrl = `${window.location.origin}/reset-password`;
-        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-          redirectTo: redirectUrl,
-        });
+      if (!supabase) {
+        setErrorMsg('Authentication service unavailable.');
+        setLoading(false);
+        return;
+      }
 
-        if (error) {
-          console.warn('Supabase resetPasswordForEmail notice:', error.message);
+      // Check if account exists and role matches if vendor or admin requested
+      if (requestedRole === 'vendor' || requestedRole === 'admin') {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('email', cleanEmail)
+          .maybeSingle();
+
+        if (profile?.role && profile.role !== requestedRole) {
+          const roleTitle = profile.role === 'vendor' ? 'Vendor' : profile.role === 'admin' ? 'Admin' : 'Customer';
+          throw new Error(`This email belongs to a ${roleTitle} account. Please use the ${roleTitle} portal to reset your password.`);
         }
       }
+
+      const redirectUrl = `${window.location.origin}/reset-password?role=${requestedRole}`;
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: redirectUrl,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setSubmitted(true);
     } catch (err) {
-      console.error('Error requesting password reset:', err);
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to request password reset. Please try again.');
     } finally {
       setLoading(false);
-      setSubmitted(true);
     }
   };
+
+  const backLink = requestedRole === 'vendor' ? '/vendor' : requestedRole === 'admin' ? '/admin' : '/profile';
+  const roleLabel = requestedRole === 'vendor' ? 'Vendor' : requestedRole === 'admin' ? 'Admin' : 'Customer';
 
   return (
     <main className="min-h-screen bg-cream-50/60 dark:bg-gray-900 pt-28 pb-20 px-4 sm:px-6 lg:px-8 font-sans flex items-center justify-center transition-colors">
       <div className="w-full max-w-md">
         {/* Back link */}
         <Link
-          to="/profile"
+          to={backLink}
           className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-wine-700 hover:text-wine-800 dark:text-gold-300 mb-6 transition-colors"
         >
-          <ArrowLeft className="h-4 w-4" /> Back to Login
+          <ArrowLeft className="h-4 w-4" /> Back to {roleLabel} Login
         </Link>
 
         <div className="rounded-3xl border border-cream-200 bg-white p-6 sm:p-8 shadow-xl dark:border-gray-800 dark:bg-gray-800">
@@ -68,43 +86,45 @@ export default function ForgotPasswordPage() {
                 </div>
                 <div>
                   <h1 className="font-display text-xl sm:text-2xl font-bold text-wine-800 dark:text-white">
-                    Forgot Password?
+                    {roleLabel} Forgot Password
                   </h1>
                   <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                    Reset your account password
+                    Reset your registered {roleLabel} account password
                   </p>
                 </div>
               </div>
 
               <p className="mt-4 text-xs leading-relaxed text-gray-600 dark:text-gray-300">
-                Enter the email address associated with your account and we&apos;ll send you a link to reset your password.
+                Enter your registered {roleLabel} email address below. We will send a secure password reset link to your email inbox.
               </p>
 
               <form onSubmit={handleSubmit} className="mt-6 space-y-4">
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400 mb-1.5">
-                    Email Address *
+                    Registered {roleLabel} Email *
                   </label>
                   <div className="relative">
                     <Mail className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
                     <input
                       type="email"
+                      required
                       value={email}
                       onChange={(e) => {
                         setEmail(e.target.value);
-                        if (emailError) setEmailError(null);
+                        if (errorMsg) setErrorMsg(null);
                       }}
-                      placeholder="Enter your email"
+                      placeholder={`Enter your ${roleLabel.toLowerCase()} email`}
                       className="w-full rounded-2xl border border-cream-300 bg-cream-50/50 pl-10 pr-4 py-2.5 text-xs text-ink-800 outline-none focus:border-wine-600 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
                     />
                   </div>
-                  {emailError && (
-                    <p className="mt-1.5 text-xs font-semibold text-red-600 dark:text-red-400 flex items-center gap-1">
-                      <AlertCircle className="h-3.5 w-3.5" />
-                      {emailError}
-                    </p>
-                  )}
                 </div>
+
+                {errorMsg && (
+                  <p className="text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 p-3 rounded-xl flex items-center gap-1.5">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    {errorMsg}
+                  </p>
+                )}
 
                 <button
                   type="submit"
@@ -116,35 +136,34 @@ export default function ForgotPasswordPage() {
                       <Loader2 className="h-4 w-4 animate-spin" /> Sending Reset Link...
                     </>
                   ) : (
-                    'Send Reset Link'
+                    'Send Password Reset Link'
                   )}
                 </button>
               </form>
 
               <div className="mt-6 border-t border-cream-200 dark:border-gray-700 pt-4 text-center text-xs">
                 <span className="text-gray-500 dark:text-gray-400">Remember your password? </span>
-                <Link to="/profile" className="font-bold text-wine-600 hover:underline dark:text-gold-300">
-                  Back to Login
+                <Link to={backLink} className="font-bold text-wine-600 hover:underline dark:text-gold-300">
+                  Back to {roleLabel} Login
                 </Link>
               </div>
             </div>
           ) : (
-            /* Generic Security Success Message (Requirements 6 & 18) */
             <div className="text-center space-y-4 py-2">
               <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-sage-500/15 text-sage-600 dark:text-sage-400">
                 <CheckCircle2 className="h-8 w-8" />
               </div>
 
               <h2 className="font-display text-xl font-bold text-wine-800 dark:text-white">
-                Check your email
+                Password Reset Link Sent
               </h2>
 
               <div className="rounded-2xl bg-cream-50 p-4 border border-cream-200 dark:bg-gray-700/60 dark:border-gray-600 text-xs text-gray-600 dark:text-gray-300 leading-relaxed text-left space-y-2">
                 <p className="font-semibold text-wine-800 dark:text-gold-300">
-                  If an account exists for {email}, you will receive a password reset link shortly.
+                  Password reset link has been sent to <strong className="text-wine-700 dark:text-gold-300">{email}</strong> via Gmail SMTP.
                 </p>
                 <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                  Please check your inbox (and spam folder) and follow the instructions to create a new password.
+                  Please open your inbox (and check spam folder) and click the link to create your new password.
                 </p>
               </div>
 
@@ -156,10 +175,10 @@ export default function ForgotPasswordPage() {
                   Didn't receive the email? Resend
                 </button>
                 <Link
-                  to="/profile"
-                  className="block w-full rounded-full bg-wine-600 py-2.5 text-xs font-bold text-white shadow hover:bg-wine-700"
+                  to={backLink}
+                  className="block w-full rounded-full bg-wine-600 py-2.5 text-xs font-bold text-white shadow hover:bg-wine-700 text-center"
                 >
-                  Back to Login
+                  Back to {roleLabel} Login
                 </Link>
               </div>
 
