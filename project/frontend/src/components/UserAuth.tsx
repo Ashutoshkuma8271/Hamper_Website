@@ -5,6 +5,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Phone, UserRound, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
 import PasswordField, { isStrongPassword } from '@/components/PasswordField';
 import { checkRoleCollision, triggerGoogleSignIn, validateSessionRole } from '@/lib/authHelpers';
+import { sanitizeInput, validateIndianPhone } from '@/lib/security';
 
 type Mode = 'login' | 'signup';
 
@@ -115,19 +116,17 @@ export default function UserAuth() {
       }
 
       if (mode === 'signup') {
-        const cleanPhone = phone.replace(/\D/g, '');
-        if (cleanPhone.length !== 10) {
-          throw new Error('Please enter a valid 10-digit mobile number.');
-        }
-        if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
-          throw new Error('Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.');
+        const phoneValidation = validateIndianPhone(phone);
+        if (!phoneValidation.valid) {
+          throw new Error(phoneValidation.error || 'Please enter a valid 10-digit mobile number.');
         }
         if (!isStrongPassword(password)) throw new Error('Use at least 8 characters with uppercase, lowercase, and a number.');
+        const cleanName = sanitizeInput(name);
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: { account_type: 'user', full_name: name, phone: cleanPhone },
+            data: { account_type: 'user', full_name: cleanName, phone: phoneValidation.cleanPhone },
             emailRedirectTo: `${window.location.origin}/profile`,
           },
         });
@@ -236,18 +235,23 @@ export default function UserAuth() {
         )}
 
         {mode === 'signup' && (
-          <Field icon={<Phone className="h-4 w-4" />} label="Phone number (10 digits)">
-            <input
-              type="tel"
-              required
-              maxLength={10}
-              pattern="[6-9][0-9]{9}"
-              autoComplete="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-              placeholder="10-digit mobile (e.g. 9876543210)"
-              className="input"
-            />
+          <Field icon={<Phone className="h-4 w-4" />} label="Mobile Number">
+            <div className="relative flex items-center">
+              <span className="flex items-center justify-center px-3.5 py-3 rounded-l-2xl border border-r-0 border-cream-300 bg-cream-100 text-ink-800 text-sm font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-gold-300 shrink-0 select-none">
+                +91
+              </span>
+              <input
+                type="tel"
+                required
+                maxLength={10}
+                pattern="[6-9][0-9]{9}"
+                autoComplete="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder=""
+                className="input rounded-l-none"
+              />
+            </div>
           </Field>
         )}
 

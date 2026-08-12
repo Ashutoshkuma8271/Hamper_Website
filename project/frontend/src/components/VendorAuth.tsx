@@ -261,17 +261,22 @@ export default function VendorAuth() {
                 className="input"
               />
             </Field>
-            <Field icon={<Phone className="h-4 w-4" />} label="Phone number (10 digits)">
-              <input
-                type="tel"
-                required
-                maxLength={10}
-                pattern="[6-9][0-9]{9}"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                placeholder="10-digit mobile (e.g. 9876543210)"
-                className="input"
-              />
+            <Field icon={<Phone className="h-4 w-4" />} label="Mobile Number">
+              <div className="relative flex items-center">
+                <span className="flex items-center justify-center px-3.5 py-3 rounded-l-2xl border border-r-0 border-cream-300 bg-cream-100 text-ink-800 text-sm font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-gold-300 shrink-0 select-none">
+                  +91
+                </span>
+                <input
+                  type="tel"
+                  required
+                  maxLength={10}
+                  pattern="[6-9][0-9]{9}"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  placeholder=""
+                  className="input rounded-l-none"
+                />
+              </div>
             </Field>
           </div>
         )}
