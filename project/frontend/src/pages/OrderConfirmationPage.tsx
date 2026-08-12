@@ -98,32 +98,9 @@ export default function OrderConfirmationPage() {
         }
       }
 
-      // 3. Fallback dummy demo order
+      // 3. If no order found, set order to null
       if (mounted) {
-        setOrder({
-          order_number: orderId || 'GH102458',
-          customer_name: 'Ashutosh Kumar',
-          customer_email: 'customer@example.com',
-          customer_phone: '9876543210',
-          address: 'Flat 402, Royal Palms, Arera Colony, Bhopal, MP - 462001',
-          items: [
-            {
-              name: 'Premium Birthday Gift Hamper',
-              image: 'https://images.pexels.com/photos/11112057/pexels-photo-11112057.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
-              price: 2899,
-              quantity: 1,
-              subtotal: 2899,
-              vendor_name: 'A_S Artisan Gifting',
-              customization: { text: 'Happy Birthday, Rahul', color: 'Black' },
-            },
-          ],
-          total: 2899,
-          payment_method: 'COD',
-          payment_status: 'pending',
-          status: 'new',
-          created_at: new Date().toISOString(),
-          estimated_delivery: '15 Aug - 18 Aug',
-        });
+        setOrder(null);
         setLoading(false);
       }
     }
@@ -147,7 +124,35 @@ export default function OrderConfirmationPage() {
     );
   }
 
-  if (!order) return null;
+  if (!order) {
+    return (
+      <main className="min-h-screen bg-cream-50/60 dark:bg-gray-900 pt-28 pb-20 px-4 flex items-center justify-center text-center font-sans">
+        <div className="max-w-md rounded-3xl bg-white p-8 shadow-xl dark:bg-gray-800 border border-cream-200 dark:border-gray-700">
+          <Package className="mx-auto h-12 w-12 text-wine-600 dark:text-gold-300" />
+          <h2 className="mt-4 font-display text-xl font-bold text-wine-800 dark:text-white">
+            Order Confirmation
+          </h2>
+          <p className="mt-2 text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+            Order reference #{orderId} was completed. You can view all your orders in your profile account dashboard.
+          </p>
+          <div className="mt-6 flex items-center justify-center gap-3">
+            <Link
+              to="/profile"
+              className="rounded-full bg-wine-600 px-6 py-2.5 text-xs font-bold text-white shadow hover:bg-wine-700"
+            >
+              View My Orders
+            </Link>
+            <Link
+              to="/all-hampers"
+              className="rounded-full border border-cream-300 px-6 py-2.5 text-xs font-bold text-gray-700 dark:border-gray-600 dark:text-gray-200"
+            >
+              Shop Hampers
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-cream-50/60 dark:bg-gray-900 pt-24 pb-28 px-4 sm:px-6 lg:px-8 font-sans transition-colors">

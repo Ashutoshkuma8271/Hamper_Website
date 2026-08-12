@@ -42,7 +42,13 @@ export function sanitizeInput(input: string): string {
  * Validates a mobile number according to the selected country code
  */
 export function validatePhoneNumber(phone: string, countryCode = '+91'): { valid: boolean; cleanPhone: string; fullPhone: string; error?: string } {
-  const cleanPhone = phone.replace(/\D/g, '');
+  let cleanPhone = phone.replace(/\D/g, '');
+  
+  // If Indian phone number includes country prefix (e.g. 919876543210), strip the leading 91
+  if (cleanPhone.length === 12 && cleanPhone.startsWith('91')) {
+    cleanPhone = cleanPhone.slice(2);
+  }
+
   const country = COUNTRY_CODES.find((c) => c.code === countryCode) || COUNTRY_CODES[0];
 
   if (!cleanPhone) {
