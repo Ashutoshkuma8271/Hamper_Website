@@ -131,6 +131,10 @@ export default function CheckoutPage() {
   const [placingOrder, setPlacingOrder] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
 
+  // Refund Wallet State
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [useWalletBalance, setUseWalletBalance] = useState<boolean>(false);
+
   // Checkout Auth Modal state
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
 
