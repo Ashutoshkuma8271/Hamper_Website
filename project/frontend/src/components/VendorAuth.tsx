@@ -178,6 +178,8 @@ export default function VendorAuth() {
           const portalName = prof.role === 'admin' ? 'Admin Portal' : 'Customer Portal';
           throw new Error(`This email is registered as a ${roleName}. Please sign in using the ${portalName}.`);
         }
+
+        navigate('/vendor', { replace: true });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');

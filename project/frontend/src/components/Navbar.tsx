@@ -44,6 +44,16 @@ export default function Navbar() {
     setMenuOpen(false);
   }, []);
 
+  const isVendor = profile?.role === 'vendor';
+  const isStoreAdmin = profile?.role === 'admin' || isAdmin;
+  const logoLink = isVendor ? '/vendor' : isStoreAdmin ? '/admin' : '/';
+
+  const roleLinks = isVendor
+    ? [{ label: 'Vendor Studio', href: '/vendor' }]
+    : isStoreAdmin
+    ? [{ label: 'Admin Control Panel', href: '/admin' }]
+    : links;
+
   return (
     <header
       role="banner"
@@ -54,12 +64,12 @@ export default function Navbar() {
       }`}
     >
       <nav role="navigation" aria-label="Main Navigation" className="mx-auto flex h-[4.5rem] max-w-7xl items-center gap-5 px-4 sm:px-6 lg:px-8">
-        <Link to="/" className="shrink-0 font-display text-xl font-bold tracking-tight text-wine-800 transition-colors hover:text-wine-600 dark:text-cream-50 dark:hover:text-gold-300" aria-label="A_S Hamper home">
+        <Link to={logoLink} className="shrink-0 font-display text-xl font-bold tracking-tight text-wine-800 transition-colors hover:text-wine-600 dark:text-cream-50 dark:hover:text-gold-300" aria-label="A_S Hamper home">
           A_S Hamper
         </Link>
 
         <div className="hidden lg:flex flex-1 items-center justify-center gap-1 xl:gap-2">
-          {links.map((l) => (
+          {roleLinks.map((l) => (
             <Link
               key={l.href}
               to={l.href}
