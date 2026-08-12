@@ -156,8 +156,8 @@ export default function CheckoutAuthModal({ isOpen, onClose, onContinueAsGuest }
           {mode === 'signup' && (
             <div>
               <label className="block text-xs font-semibold text-ink-700/70 dark:text-gray-300 mb-1">Mobile Number</label>
-              <div className="relative flex items-center">
-                <span className="flex items-center justify-center px-3 py-2.5 rounded-l-2xl border border-r-0 border-cream-300 bg-cream-100 text-ink-800 text-xs font-bold dark:border-gray-700 dark:bg-gray-800 dark:text-gold-300 shrink-0 select-none">
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-xs text-wine-700 dark:text-gold-300 select-none">
                   +91
                 </span>
                 <input
@@ -168,7 +168,7 @@ export default function CheckoutAuthModal({ isOpen, onClose, onContinueAsGuest }
                   value={phone}
                   onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   placeholder=""
-                  className="w-full rounded-r-2xl rounded-l-none border border-cream-300 bg-white px-4 py-2.5 text-sm text-ink-800 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
+                  className="w-full rounded-2xl border border-cream-300 bg-white pl-11 pr-4 py-2.5 text-sm text-ink-800 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
                 />
               </div>
             </div>

@@ -107,6 +107,11 @@ export default function UserAuth() {
     }
 
     try {
+      const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      if (!EMAIL_REGEX.test(email.trim())) {
+        throw new Error('Please enter a valid email address (e.g. name@gmail.com).');
+      }
+
       // Check cross-role collision before attempting login/signup
       const collisionMsg = await checkRoleCollision(email, 'user');
       if (collisionMsg) {
@@ -236,8 +241,8 @@ export default function UserAuth() {
 
         {mode === 'signup' && (
           <Field icon={<Phone className="h-4 w-4" />} label="Mobile Number">
-            <div className="relative flex items-center">
-              <span className="flex items-center justify-center px-3.5 py-3 rounded-l-2xl border border-r-0 border-cream-300 bg-cream-100 text-ink-800 text-sm font-semibold dark:border-gray-700 dark:bg-gray-800 dark:text-gold-300 shrink-0 select-none">
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-xs text-wine-700 dark:text-gold-300 select-none">
                 +91
               </span>
               <input
@@ -249,7 +254,7 @@ export default function UserAuth() {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                 placeholder=""
-                className="input rounded-l-none"
+                className="input pl-12"
               />
             </div>
           </Field>
