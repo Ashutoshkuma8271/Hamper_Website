@@ -143,12 +143,26 @@ export default function VerifyEmailPage() {
         }
       }
 
-      // 2. Mark profile as email_verified in database
+      // 2. Guarantee user profile record is created and stored in database with email_verified = true
       if (data?.user?.id) {
+        const metaData = data.user.user_metadata || {};
         await supabase
           .from('profiles')
-          .update({ email_verified: true, account_status: 'active' })
-          .eq('id', data.user.id);
+          .upsert(
+            {
+              id: data.user.id,
+              full_name: metaData.full_name || metaData.business_name || 'User',
+              business_name: metaData.business_name || null,
+              shop_no: metaData.shop_no || null,
+              gst_no: metaData.gst_no || null,
+              role: metaData.account_type || role || 'user',
+              phone: metaData.phone || null,
+              email_verified: true,
+              account_status: 'active',
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'id' }
+          );
       }
 
       // 3. Clear temporary verification storage
