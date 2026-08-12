@@ -19,6 +19,10 @@ export interface DeliveryAddress {
 
 const LOCAL_STORAGE_KEY = 'a_s_hamper_saved_addresses';
 
+function getStorageKey(userId?: string): string {
+  return userId ? `${LOCAL_STORAGE_KEY}_${userId}` : `${LOCAL_STORAGE_KEY}_guest`;
+}
+
 /**
  * Validates a 6-digit Indian Pincode
  */
@@ -82,11 +86,13 @@ export async function getSavedAddresses(userId?: string): Promise<DeliveryAddres
     }
   }
 
-  // Fallback to local storage
+  // Fallback to user-scoped local storage
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    const key = getStorageKey(userId);
+    const raw = localStorage.getItem(key);
     if (raw) {
-      return JSON.parse(raw) as DeliveryAddress[];
+      const addresses = JSON.parse(raw) as DeliveryAddress[];
+      return userId ? addresses.filter(a => !a.user_id || a.user_id === userId) : addresses;
     }
   } catch (e) {
     console.error('Local storage address parse error:', e);
@@ -168,7 +174,7 @@ export async function saveDeliveryAddress(
     updatedList = [cleanAddress, ...existing];
   }
 
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedList));
+  localStorage.setItem(getStorageKey(userId), JSON.stringify(updatedList));
   return cleanAddress;
 }
 
@@ -189,7 +195,7 @@ export async function deleteDeliveryAddress(id: string, userId?: string): Promis
   if (filtered.length > 0 && !filtered.some((a) => a.is_default)) {
     filtered[0].is_default = true;
   }
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(filtered));
+  localStorage.setItem(getStorageKey(userId), JSON.stringify(filtered));
 }
 
 /**
@@ -207,5 +213,5 @@ export async function setDefaultDeliveryAddress(id: string, userId?: string): Pr
 
   const existing = await getSavedAddresses(userId);
   existing.forEach((a) => (a.is_default = a.id === id));
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(existing));
+  localStorage.setItem(getStorageKey(userId), JSON.stringify(existing));
 }

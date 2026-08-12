@@ -22,6 +22,10 @@ import {
   Edit2,
   Sparkles,
   Wallet,
+  QrCode,
+  Copy,
+  Check,
+  Smartphone,
 } from 'lucide-react';
 import { formatPrice, useCart } from '@/cart';
 import { useAuth } from '@/hooks/useAuth';
@@ -29,7 +33,9 @@ import { supabase } from '@/lib/supabase';
 import { openRazorpayCheckout } from '@/lib/razorpay';
 import RazorpayModal from '@/components/RazorpayModal';
 import { getWalletBalance, deductWalletBalance, subscribeToRealtimeWallet } from '@/lib/orderSync';
+import { getSavedAddresses, saveDeliveryAddress, type DeliveryAddress } from '@/lib/addressStore';
 import CheckoutAuthModal from '@/components/CheckoutAuthModal';
+import { toast } from 'react-hot-toast';
 
 type Address = {
   id: string;
@@ -44,34 +50,6 @@ type Address = {
   landmark?: string;
   isDefault?: boolean;
 };
-
-const DEFAULT_SAVED_ADDRESSES: Address[] = [
-  {
-    id: 'addr-1',
-    type: 'Home',
-    name: 'Ashutosh Kumar',
-    phone: '9876543210',
-    pincode: '462001',
-    flat: 'Flat 402, Royal Palms',
-    street: 'Arera Colony',
-    city: 'Bhopal',
-    state: 'Madhya Pradesh',
-    landmark: 'Near Bittan Market',
-    isDefault: true,
-  },
-  {
-    id: 'addr-2',
-    type: 'Work',
-    name: 'Ashutosh Kumar',
-    phone: '9876543210',
-    pincode: '462011',
-    flat: 'Suite 204, Tech Park',
-    street: 'MP Nagar Zone 1',
-    city: 'Bhopal',
-    state: 'Madhya Pradesh',
-    landmark: 'Opposite DB Mall',
-  },
-];
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
@@ -99,9 +77,9 @@ export default function CheckoutPage() {
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
 
-  // Address State
-  const [addresses, setAddresses] = useState<Address[]>(DEFAULT_SAVED_ADDRESSES);
-  const [selectedAddrId, setSelectedAddrId] = useState<string>(DEFAULT_SAVED_ADDRESSES[0].id);
+  // Address State - Strictly isolated per user
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [selectedAddrId, setSelectedAddrId] = useState<string>('');
   const [showAddAddrModal, setShowAddAddrModal] = useState(false);
   const [editingAddr, setEditingAddr] = useState<Address | null>(null);
 
@@ -119,14 +97,11 @@ export default function CheckoutPage() {
   });
 
   const [addrError, setAddrError] = useState<string | null>(null);
-  const [pinVerification, setPinVerification] = useState<{ valid: boolean; message: string; date: string } | null>({
-    valid: true,
-    message: 'Delivery available to 462001',
-    date: '15 Aug - 18 Aug',
-  });
+  const [pinVerification, setPinVerification] = useState<{ valid: boolean; message: string; date: string } | null>(null);
 
-  // Payment Method & Razorpay Modal state
-  const [paymentMethod, setPaymentMethod] = useState<'razorpay' | 'cod'>('razorpay');
+  // Payment Method State - NO DEFAULT SELECTED
+  const [paymentMethod, setPaymentMethod] = useState<'upi' | 'razorpay' | 'cod' | null>(null);
+  const [copiedUpi, setCopiedUpi] = useState(false);
   const [showRazorpayModal, setShowRazorpayModal] = useState(false);
   const [placingOrder, setPlacingOrder] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
@@ -138,13 +113,15 @@ export default function CheckoutPage() {
   // Checkout Auth Modal state
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
 
+  const merchantUpiId = 'ashutoshgifthamper@upi';
+
   useEffect(() => {
     if (!session) {
       setShowAuthModal(true);
     }
   }, [session]);
 
-  // Load user profile & wallet details if logged in
+  // Load user profile & user-isolated delivery addresses
   useEffect(() => {
     if (session?.user) {
       setCustomerEmail(session.user.email || '');
@@ -155,7 +132,37 @@ export default function CheckoutPage() {
 
       getWalletBalance(session.user.id).then(setWalletBalance);
       const unsubscribe = subscribeToRealtimeWallet(session.user.id, setWalletBalance);
+
+      // Load user delivery addresses strictly matching session.user.id
+      getSavedAddresses(session.user.id).then((saved) => {
+        if (saved && saved.length > 0) {
+          const mapped: Address[] = saved.map((a) => ({
+            id: a.id,
+            type: a.address_type as 'Home' | 'Work' | 'Other',
+            name: a.full_name,
+            phone: a.phone,
+            pincode: a.pincode,
+            flat: a.house_no,
+            street: a.street,
+            city: a.city,
+            state: a.state,
+            landmark: a.landmark,
+            isDefault: a.is_default,
+          }));
+          setAddresses(mapped);
+          const def = mapped.find((m) => m.isDefault) || mapped[0];
+          setSelectedAddrId(def.id);
+          if (def.pincode) handlePincodeCheck(def.pincode);
+        } else {
+          setAddresses([]);
+          setSelectedAddrId('');
+        }
+      });
+
       return () => unsubscribe();
+    } else {
+      setAddresses([]);
+      setSelectedAddrId('');
     }
   }, [session, profile]);
 
@@ -187,14 +194,21 @@ export default function CheckoutPage() {
       setPinVerification({
         valid: true,
         message: `✓ Delivery available to ${cleanPin}`,
-        date: 'Estimated delivery by 15 Aug',
+        date: 'Estimated delivery in 2-4 business days',
       });
     } else {
       setPinVerification(null);
     }
   };
 
-  const handleSaveAddress = (e: React.FormEvent) => {
+  const handleCopyUpiId = () => {
+    navigator.clipboard.writeText(merchantUpiId);
+    setCopiedUpi(true);
+    toast.success('UPI ID copied to clipboard!');
+    setTimeout(() => setCopiedUpi(false), 2500);
+  };
+
+  const handleSaveAddress = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddrError(null);
 
@@ -212,30 +226,52 @@ export default function CheckoutPage() {
     if (!addrForm.city?.trim()) return setAddrError('City is required');
     if (!addrForm.state?.trim()) return setAddrError('State is required');
 
-    if (editingAddr) {
-      setAddresses((prev) =>
-        prev.map((a) => (a.id === editingAddr.id ? ({ ...a, ...addrForm, phone: cleanMobile } as Address) : a))
+    try {
+      const savedAddr = await saveDeliveryAddress(
+        {
+          id: editingAddr?.id,
+          full_name: addrForm.name.trim(),
+          phone: cleanMobile,
+          house_no: addrForm.flat.trim(),
+          street: addrForm.street.trim(),
+          city: addrForm.city.trim(),
+          state: addrForm.state.trim(),
+          pincode: addrForm.pincode.trim(),
+          landmark: addrForm.landmark?.trim() || '',
+          address_type: (addrForm.type as any) || 'Home',
+          is_default: addresses.length === 0,
+        },
+        session?.user?.id
       );
-    } else {
-      const newAddr: Address = {
-        id: `addr-${Date.now()}`,
-        type: addrForm.type as 'Home' | 'Work' | 'Other',
-        name: addrForm.name!,
-        phone: cleanMobile,
-        pincode: addrForm.pincode!,
-        flat: addrForm.flat!,
-        street: addrForm.street!,
-        city: addrForm.city!,
-        state: addrForm.state!,
-        landmark: addrForm.landmark,
-      };
-      setAddresses((prev) => [...prev, newAddr]);
-      setSelectedAddrId(newAddr.id);
-    }
 
-    setShowAddAddrModal(false);
-    setEditingAddr(null);
-    setAddrForm({ type: 'Home', name: '', phone: '', pincode: '', flat: '', street: '', city: '', state: '', landmark: '' });
+      const newAddrItem: Address = {
+        id: savedAddr.id,
+        type: savedAddr.address_type as any,
+        name: savedAddr.full_name,
+        phone: savedAddr.phone,
+        pincode: savedAddr.pincode,
+        flat: savedAddr.house_no,
+        street: savedAddr.street,
+        city: savedAddr.city,
+        state: savedAddr.state,
+        landmark: savedAddr.landmark,
+        isDefault: savedAddr.is_default,
+      };
+
+      if (editingAddr) {
+        setAddresses((prev) => prev.map((a) => (a.id === editingAddr.id ? newAddrItem : a)));
+      } else {
+        setAddresses((prev) => [newAddrItem, ...prev]);
+        setSelectedAddrId(newAddrItem.id);
+      }
+
+      setShowAddAddrModal(false);
+      setEditingAddr(null);
+      setAddrForm({ type: 'Home', name: '', phone: '', pincode: '', flat: '', street: '', city: '', state: '', landmark: '' });
+      toast.success('Delivery address saved successfully!');
+    } catch (err) {
+      setAddrError(err instanceof Error ? err.message : 'Failed to save address.');
+    }
   };
 
   const maxWalletUsable = useWalletBalance ? Math.min(walletBalance, finalTotal) : 0;
@@ -295,257 +331,259 @@ export default function CheckoutPage() {
       ...orderData,
       id: `ord-${Date.now()}`,
       created_at: new Date().toISOString(),
-      estimated_delivery: '15 Aug - 18 Aug',
+      estimated_delivery: 'Estimated in 2-4 business days',
     };
 
     try {
-      localStorage.setItem(`as_hamper_order_${orderNum}`, JSON.stringify(localOrder));
-      localStorage.setItem('as_hamper_latest_order', JSON.stringify(localOrder));
+      const existing = localStorage.getItem('a_s_hamper_orders');
+      const parsed = existing ? JSON.parse(existing) : [];
+      localStorage.setItem('a_s_hamper_orders', JSON.stringify([localOrder, ...parsed]));
     } catch (e) {
-      console.error('Localstorage order save error:', e);
+      console.error('Local order save error:', e);
     }
 
     clear();
-    navigate(`/order-confirmation/${orderNum}`);
+    navigate(`/order-confirmation?orderId=${orderNum}`);
   };
 
   const handlePlaceOrder = async () => {
     setOrderError(null);
 
-    const cleanMobile = customerPhone.replace(/\D/g, '').slice(-10);
-
-    if (!customerName.trim()) {
-      setOrderError('Please enter your full name.');
-      return;
-    }
-
-    if (!cleanMobile || !/^[6-9]\d{9}$/.test(cleanMobile)) {
-      setOrderError('Please enter a valid 10-digit Indian mobile number.');
-      return;
-    }
-
     if (!selectedAddr) {
-      setOrderError('Please select a valid delivery address.');
+      setOrderError('Please select or add a delivery address to proceed.');
+      return;
+    }
+
+    if (!paymentMethod) {
+      setOrderError('Please select your preferred payment method (UPI, Razorpay, or COD).');
       return;
     }
 
     setPlacingOrder(true);
 
-    if (remainingPayableTotal === 0) {
-      await createOrderRecord('WALLET', 'paid');
+    if (paymentMethod === 'cod') {
+      await createOrderRecord('COD', 'pending');
       setPlacingOrder(false);
       return;
     }
 
-    if (paymentMethod === 'razorpay') {
-      const tempOrderNum = `GH${Math.floor(100000 + Math.random() * 900000)}`;
+    if (paymentMethod === 'upi') {
+      // Direct UPI QR payment verification
+      setShowRazorpayModal(true);
+      return;
+    }
 
-      await openRazorpayCheckout({
-        amount: remainingPayableTotal,
-        orderNumber: tempOrderNum,
-        customerName: customerName,
-        customerEmail: customerEmail || 'guest@ashamper.com',
-        customerPhone: cleanMobile,
-        onSuccess: async (rzpRes) => {
-          await createOrderRecord('RAZORPAY', 'paid', rzpRes.razorpay_payment_id);
-          setPlacingOrder(false);
-        },
-        onFailure: (errorMsg) => {
-          setPlacingOrder(false);
-          if (errorMsg === 'RAZORPAY_FALLBACK' || !errorMsg) {
-            setShowRazorpayModal(true);
-          } else if (errorMsg.includes('cancelled')) {
-            setOrderError('Payment process was cancelled.');
-          } else {
-            setShowRazorpayModal(true);
-          }
-        },
-      });
-    } else {
-      // Cash on Delivery
-      await createOrderRecord('COD', 'pending');
-      setPlacingOrder(false);
+    if (paymentMethod === 'razorpay') {
+      setShowRazorpayModal(true);
     }
   };
 
-  return (
-    <main className="min-h-screen bg-cream-50/60 dark:bg-gray-900 pt-24 pb-28 px-4 sm:px-6 lg:px-8 font-sans transition-colors">
-      <div className="mx-auto max-w-7xl">
-        {/* Step Progress Indicator */}
-        <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-cream-200 dark:border-gray-800 pb-6">
-          <div>
-            <Link
-              to="/cart"
-              className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-wine-700 hover:text-wine-800 dark:text-gold-300 transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" /> Edit Cart
-            </Link>
-            <h1 className="mt-2 font-display text-2xl sm:text-3xl font-bold tracking-tight text-wine-800 dark:text-white">
-              Checkout
-            </h1>
-          </div>
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
+    `upi://pay?pa=${merchantUpiId}&pn=MyGiftHamper&am=${Math.round(remainingPayableTotal)}&cu=INR`
+  )}`;
 
-          <div className="flex items-center gap-2 sm:gap-3 text-xs font-semibold">
-            <span className="flex items-center gap-1.5 text-sage-600 dark:text-sage-400">
-              <CheckCircle2 className="h-4 w-4" /> Cart
-            </span>
-            <span className="text-gray-300 dark:text-gray-600">→</span>
-            <span className="flex items-center gap-1.5 rounded-full bg-wine-600 px-3.5 py-1.5 text-white shadow-sm">
-              <span className="grid h-4 w-4 place-items-center rounded-full bg-white text-[10px] font-bold text-wine-700">
-                2
-              </span>
-              Delivery
-            </span>
-            <span className="text-gray-300 dark:text-gray-600">→</span>
-            <span className="flex items-center gap-1.5 text-gray-400 dark:text-gray-500">
-              <span className="grid h-4 w-4 place-items-center rounded-full bg-gray-200 text-[10px] font-bold text-gray-600 dark:bg-gray-800 dark:text-gray-400">
-                3
-              </span>
-              Review
-            </span>
-            <span className="text-gray-300 dark:text-gray-600">→</span>
-            <span className="flex items-center gap-1.5 text-gray-400 dark:text-gray-500">
-              <span className="grid h-4 w-4 place-items-center rounded-full bg-gray-200 text-[10px] font-bold text-gray-600 dark:bg-gray-800 dark:text-gray-400">
-                4
-              </span>
-              Confirmation
-            </span>
-          </div>
+  return (
+    <main className="min-h-screen bg-cream-50/60 dark:bg-gray-900 pt-24 pb-20 px-4 sm:px-6 lg:px-8 font-sans transition-colors">
+      <div className="mx-auto max-w-7xl">
+        {/* Navigation Breadcrumb Header */}
+        <div className="flex items-center justify-between border-b border-cream-200 dark:border-gray-800 pb-4 mb-6">
+          <button
+            onClick={() => navigate('/cart')}
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-wine-700 hover:text-wine-900 dark:text-gold-300 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back to Cart
+          </button>
+
+          <h1 className="font-display text-xl sm:text-2xl font-bold text-wine-800 dark:text-white flex items-center gap-2">
+            <Lock className="h-5 w-5 text-gold-500" /> Secure Checkout
+          </h1>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-12 lg:items-start">
-          {/* LEFT COLUMN: Checkout Form Sections */}
+        <div className="grid lg:grid-cols-12 gap-8">
+          {/* LEFT COLUMN: Customer Info, Addresses & Payment Options */}
           <div className="lg:col-span-7 space-y-6">
-
-            {/* Express Checkout Account Banner for Guest Users */}
-            {!session && (
-              <div className="rounded-3xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/50 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <span className="grid place-items-center h-10 w-10 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 shrink-0">
-                    <User className="h-5 w-5" />
-                  </span>
-                  <div>
-                    <h3 className="font-display text-sm font-bold text-amber-900 dark:text-amber-100">
-                      Express Checkout Account
-                    </h3>
-                    <p className="text-xs text-amber-800/80 dark:text-amber-200/80">
-                      Sign in or register to save addresses, earn wallet rewards &amp; track your order live.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowAuthModal(true)}
-                  className="shrink-0 rounded-full bg-wine-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-wine-700 transition-all shadow-md"
-                >
-                  Sign In / Register
-                </button>
-              </div>
-            )}
-
-            {/* 1. Delivery Address Manager */}
+            
+            {/* 1. Customer Contact Details */}
             <div className="rounded-3xl border border-cream-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
               <div className="flex items-center justify-between border-b border-cream-200 dark:border-gray-700 pb-3">
                 <h2 className="font-display text-base font-bold text-wine-800 dark:text-white flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-gold-600" /> Delivery Address
+                  <User className="h-4 w-4 text-wine-600 dark:text-gold-300" /> 1. Customer Contact
+                </h2>
+                {session ? (
+                  <span className="rounded-full bg-sage-500/15 px-3 py-1 text-[11px] font-bold text-sage-700 dark:text-sage-300 flex items-center gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Logged In
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setShowAuthModal(true)}
+                    className="text-xs font-bold text-wine-600 hover:underline dark:text-gold-300"
+                  >
+                    Log In for Faster Checkout
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-4 grid sm:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <label className="block text-gray-500 dark:text-gray-400 font-medium mb-1">Customer Email</label>
+                  <input
+                    type="email"
+                    readOnly={!!session}
+                    value={customerEmail}
+                    onChange={(e) => setCustomerEmail(e.target.value)}
+                    placeholder="you@domain.com"
+                    className="w-full rounded-2xl border border-cream-300 bg-cream-50/60 p-3 text-wine-800 dark:border-gray-600 dark:bg-gray-700 dark:text-white font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-500 dark:text-gray-400 font-medium mb-1">Mobile Number</label>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-2xl border border-cream-300 bg-cream-100 p-3 text-wine-800 dark:border-gray-600 dark:bg-gray-700 dark:text-white font-bold">
+                      +91
+                    </span>
+                    <input
+                      type="tel"
+                      maxLength={10}
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, ''))}
+                      placeholder="10-digit number"
+                      className="w-full rounded-2xl border border-cream-300 bg-cream-50/60 p-3 text-wine-800 dark:border-gray-600 dark:bg-gray-700 dark:text-white font-medium"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. User Delivery Addresses Section */}
+            <div className="rounded-3xl border border-cream-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+              <div className="flex items-center justify-between border-b border-cream-200 dark:border-gray-700 pb-3">
+                <h2 className="font-display text-base font-bold text-wine-800 dark:text-white flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-wine-600 dark:text-gold-300" /> 2. Delivery Address
                 </h2>
                 <button
-                  type="button"
                   onClick={() => {
                     setEditingAddr(null);
                     setAddrForm({
                       type: 'Home',
                       name: customerName,
                       phone: customerPhone,
-                      pincode: '462001',
+                      pincode: '',
                       flat: '',
                       street: '',
-                      city: 'Bhopal',
-                      state: 'Madhya Pradesh',
+                      city: '',
+                      state: '',
                       landmark: '',
                     });
                     setShowAddAddrModal(true);
                   }}
-                  className="inline-flex items-center gap-1 rounded-full bg-cream-100 px-3 py-1.5 text-xs font-semibold text-wine-700 hover:bg-cream-200 dark:bg-gray-700 dark:text-gold-300 transition-colors"
+                  className="inline-flex items-center gap-1 text-xs font-bold text-wine-600 hover:text-wine-700 dark:text-gold-300"
                 >
-                  <Plus className="h-3.5 w-3.5" /> Add New Address
+                  <Plus className="h-4 w-4" /> Add New Address
                 </button>
               </div>
 
-              {/* Saved Address Cards */}
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {addresses.map((addr) => {
-                  const isSelected = selectedAddrId === addr.id;
-                  const displayMobile = addr.phone.replace(/\D/g, '').slice(-10);
-                  return (
-                    <div
-                      key={addr.id}
-                      onClick={() => {
-                        setSelectedAddrId(addr.id);
-                        handlePincodeCheck(addr.pincode);
-                      }}
-                      className={`relative flex cursor-pointer flex-col justify-between rounded-2xl border p-4 transition-all ${
-                        isSelected
-                          ? 'border-wine-600 bg-wine-600/5 ring-2 ring-wine-600/30 dark:bg-wine-600/10'
-                          : 'border-cream-200 bg-cream-50/50 hover:border-wine-600/40 dark:border-gray-700 dark:bg-gray-700/50'
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className="inline-flex items-center gap-1 rounded-full bg-wine-600 px-2.5 py-0.5 text-[10px] font-bold text-white">
-                            {addr.type === 'Home' ? <Home className="h-3 w-3" /> : <Briefcase className="h-3 w-3" />}
-                            {addr.type}
-                          </span>
-                          {isSelected && (
-                            <span className="text-[10px] font-bold text-wine-600 dark:text-gold-300">
-                              ✓ Selected
+              {addresses.length === 0 ? (
+                <div className="mt-4 text-center py-6 rounded-2xl bg-cream-50 dark:bg-gray-700/50 border border-dashed border-cream-300 dark:border-gray-600">
+                  <MapPin className="mx-auto h-8 w-8 text-gray-400" />
+                  <p className="mt-2 text-xs font-semibold text-gray-600 dark:text-gray-300">
+                    No delivery addresses saved for this account.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setEditingAddr(null);
+                      setAddrForm({
+                        type: 'Home',
+                        name: customerName,
+                        phone: customerPhone,
+                        pincode: '',
+                        flat: '',
+                        street: '',
+                        city: '',
+                        state: '',
+                        landmark: '',
+                      });
+                      setShowAddAddrModal(true);
+                    }}
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-wine-600 px-5 py-2 text-xs font-bold text-white shadow hover:bg-wine-700"
+                  >
+                    <Plus className="h-4 w-4" /> Add Delivery Address
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4 grid sm:grid-cols-2 gap-4">
+                  {addresses.map((addr) => {
+                    const isSelected = selectedAddrId === addr.id;
+                    const displayMobile = addr.phone.replace(/\D/g, '').slice(-10);
+                    return (
+                      <div
+                        key={addr.id}
+                        onClick={() => {
+                          setSelectedAddrId(addr.id);
+                          handlePincodeCheck(addr.pincode);
+                        }}
+                        className={`relative cursor-pointer rounded-2xl border p-4 transition-all flex flex-col justify-between ${
+                          isSelected
+                            ? 'border-wine-600 bg-wine-600/5 ring-2 ring-wine-600/30 dark:border-gold-400 dark:bg-wine-900/30'
+                            : 'border-cream-200 bg-cream-50/40 hover:border-wine-600/40 dark:border-gray-700 dark:bg-gray-700/40'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-cream-200 px-2.5 py-0.5 text-[10px] font-bold text-wine-800 dark:bg-gray-600 dark:text-gray-200">
+                              {addr.type === 'Home' ? <Home className="h-3 w-3" /> : <Briefcase className="h-3 w-3" />}
+                              {addr.type}
                             </span>
-                          )}
+                            {isSelected && (
+                              <span className="text-[10px] font-bold text-wine-600 dark:text-gold-300">
+                                ✓ Selected
+                              </span>
+                            )}
+                          </div>
+
+                          <h4 className="mt-2 font-display text-sm font-bold text-wine-800 dark:text-white">
+                            {addr.name}
+                          </h4>
+                          <p className="text-xs text-gray-600 dark:text-gray-300 font-medium">
+                            Mobile: +91 {displayMobile}
+                          </p>
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                            {addr.flat}, {addr.street}, {addr.city}, {addr.state} -{' '}
+                            <span className="font-bold text-wine-700 dark:text-gold-300">{addr.pincode}</span>
+                          </p>
                         </div>
 
-                        <h4 className="mt-2 font-display text-sm font-bold text-wine-800 dark:text-white">
-                          {addr.name}
-                        </h4>
-                        <p className="text-xs text-gray-600 dark:text-gray-300 font-medium">
-                          Mobile: +91 {displayMobile}
-                        </p>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                          {addr.flat}, {addr.street}, {addr.city}, {addr.state} -{' '}
-                          <span className="font-bold text-wine-700 dark:text-gold-300">{addr.pincode}</span>
-                        </p>
+                        <div className="mt-3 border-t border-cream-200 dark:border-gray-600 pt-2 flex items-center justify-between text-xs">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedAddrId(addr.id);
+                              handlePincodeCheck(addr.pincode);
+                            }}
+                            className={`font-semibold ${
+                              isSelected ? 'text-wine-600 dark:text-gold-300' : 'text-gray-600 hover:text-wine-600'
+                            }`}
+                          >
+                            {isSelected ? 'Deliver Here ✓' : 'Select Address'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingAddr(addr);
+                              setAddrForm({ ...addr, phone: displayMobile });
+                              setShowAddAddrModal(true);
+                            }}
+                            className="text-gray-400 hover:text-wine-600"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
-
-                      <div className="mt-3 border-t border-cream-200 dark:border-gray-600 pt-2 flex items-center justify-between text-xs">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedAddrId(addr.id);
-                            handlePincodeCheck(addr.pincode);
-                          }}
-                          className={`font-semibold ${
-                            isSelected ? 'text-wine-600 dark:text-gold-300' : 'text-gray-600 hover:text-wine-600'
-                          }`}
-                        >
-                          {isSelected ? 'Deliver Here ✓' : 'Select Address'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingAddr(addr);
-                            setAddrForm({ ...addr, phone: displayMobile });
-                            setShowAddAddrModal(true);
-                          }}
-                          className="text-gray-400 hover:text-wine-600"
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Delivery Availability Banner */}
               {pinVerification && (
@@ -605,63 +643,143 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            {/* 4. Payment Section with Razorpay Integration */}
-            <div className="rounded-3xl border border-cream-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            {/* 4. Payment Options - NO DEFAULT SELECTED */}
+            <div className="rounded-3xl border border-cream-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800 space-y-4">
               <div className="border-b border-cream-200 dark:border-gray-700 pb-3">
                 <h2 className="font-display text-base font-bold text-wine-800 dark:text-white flex items-center gap-2">
-                  <CreditCard className="h-4 w-4 text-gold-600" /> Select Payment Method
+                  <CreditCard className="h-4 w-4 text-gold-600" /> Select Payment Option
                 </h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Choose your preferred payment method below.
+                </p>
               </div>
 
-              <div className="mt-4 space-y-3">
-                {[
-                  {
-                    id: 'razorpay',
-                    label: 'Online Payment (Razorpay - Google Pay, PhonePe, Paytm, Cards, BHIM, Netbanking)',
-                    desc: 'Real-time 100% secure payment via UPI Apps, Google Pay, PhonePe, Paytm, Credit/Debit Cards & Net Banking',
-                    badge: '⚡ Recommended',
-                  },
-                  {
-                    id: 'cod',
-                    label: 'Cash on Delivery (COD)',
-                    desc: 'Pay cash when your gift hamper arrives at your doorstep',
-                  },
-                ].map((pay) => {
-                  const isChecked = paymentMethod === pay.id;
-                  return (
-                    <label
-                      key={pay.id}
-                      className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-all ${
-                        isChecked
-                          ? 'border-wine-600 bg-wine-600/5 ring-1 ring-wine-600 dark:bg-wine-600/10'
-                          : 'border-cream-200 bg-cream-50/40 hover:border-wine-600/30 dark:border-gray-700 dark:bg-gray-700/40'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="payment_method"
-                        checked={isChecked}
-                        onChange={() => setPaymentMethod(pay.id as any)}
-                        className="mt-1 accent-wine-600"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <p className="font-display text-xs font-bold text-wine-800 dark:text-white">
-                            {pay.label}
-                          </p>
-                          {pay.badge && (
-                            <span className="rounded-full bg-wine-600 px-2 py-0.5 text-[9px] font-bold text-white">
-                              {pay.badge}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                          {pay.desc}
+              <div className="space-y-3">
+                {/* Option 1: Instant UPI QR Code */}
+                <label
+                  className={`block cursor-pointer rounded-2xl border p-4 transition-all ${
+                    paymentMethod === 'upi'
+                      ? 'border-wine-600 bg-wine-600/5 ring-2 ring-wine-600/30 dark:bg-wine-900/30'
+                      : 'border-cream-200 bg-cream-50/40 hover:border-wine-600/30 dark:border-gray-700 dark:bg-gray-700/40'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="payment_option"
+                      checked={paymentMethod === 'upi'}
+                      onChange={() => setPaymentMethod('upi')}
+                      className="mt-1 accent-wine-600"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-display text-xs font-bold text-wine-800 dark:text-white flex items-center gap-1.5">
+                          <QrCode className="h-4 w-4 text-wine-600 dark:text-gold-300" />
+                          UPI Payment (Scan QR Code / Google Pay, PhonePe, Paytm, BHIM)
+                        </span>
+                        <span className="rounded-full bg-gold-500/20 text-wine-900 dark:text-gold-300 text-[10px] font-bold px-2 py-0.5">
+                          Instant Scan &amp; Pay
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                        Scan auto-generated UPI QR code or copy merchant UPI ID to complete payment instantly.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Dynamic QR Code & Merchant UPI ID display box */}
+                  {paymentMethod === 'upi' && (
+                    <div className="mt-4 pt-4 border-t border-cream-200 dark:border-gray-700 text-center space-y-3 animate-fade-in">
+                      <div className="inline-block p-3 rounded-2xl bg-white shadow-md border border-cream-300 dark:border-gray-600">
+                        <img
+                          src={qrCodeUrl}
+                          alt="UPI Payment QR Code"
+                          className="h-44 w-44 mx-auto rounded-xl"
+                        />
+                        <p className="mt-2 text-[11px] font-bold text-wine-800 dark:text-gray-900">
+                          Scan to pay {formatPrice(remainingPayableTotal)}
                         </p>
                       </div>
-                    </label>
-                  );
-                })}
+
+                      <div className="flex items-center justify-center gap-2 max-w-sm mx-auto bg-cream-100 dark:bg-gray-700/80 p-2.5 rounded-xl border border-cream-300 dark:border-gray-600">
+                        <span className="text-xs font-mono font-bold text-wine-800 dark:text-gold-300">
+                          UPI ID: {merchantUpiId}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleCopyUpiId();
+                          }}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-wine-600 hover:text-wine-800 dark:text-gold-300 bg-white dark:bg-gray-800 px-2.5 py-1 rounded-lg border shadow-sm"
+                        >
+                          {copiedUpi ? <Check className="h-3.5 w-3.5 text-sage-600" /> : <Copy className="h-3.5 w-3.5" />}
+                          {copiedUpi ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 flex items-center justify-center gap-1 font-medium">
+                        <Smartphone className="h-3.5 w-3.5 text-sage-600" />
+                        Scan with Google Pay, PhonePe, Paytm, BHIM, or any UPI App
+                      </p>
+                    </div>
+                  )}
+                </label>
+
+                {/* Option 2: Razorpay Gateway */}
+                <label
+                  className={`block cursor-pointer rounded-2xl border p-4 transition-all ${
+                    paymentMethod === 'razorpay'
+                      ? 'border-wine-600 bg-wine-600/5 ring-2 ring-wine-600/30 dark:bg-wine-900/30'
+                      : 'border-cream-200 bg-cream-50/40 hover:border-wine-600/30 dark:border-gray-700 dark:bg-gray-700/40'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="payment_option"
+                      checked={paymentMethod === 'razorpay'}
+                      onChange={() => setPaymentMethod('razorpay')}
+                      className="mt-1 accent-wine-600"
+                    />
+                    <div className="flex-1">
+                      <span className="font-display text-xs font-bold text-wine-800 dark:text-white">
+                        Online Payment (Credit / Debit Card / NetBanking / Razorpay)
+                      </span>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                        Pay via Visa, Mastercard, RuPay, NetBanking &amp; Digital Wallets through Razorpay.
+                      </p>
+                    </div>
+                  </div>
+                </label>
+
+                {/* Option 3: Cash on Delivery (COD) */}
+                <label
+                  className={`block cursor-pointer rounded-2xl border p-4 transition-all ${
+                    paymentMethod === 'cod'
+                      ? 'border-wine-600 bg-wine-600/5 ring-2 ring-wine-600/30 dark:bg-wine-900/30'
+                      : 'border-cream-200 bg-cream-50/40 hover:border-wine-600/30 dark:border-gray-700 dark:bg-gray-700/40'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="payment_option"
+                      checked={paymentMethod === 'cod'}
+                      onChange={() => setPaymentMethod('cod')}
+                      className="mt-1 accent-wine-600"
+                    />
+                    <div className="flex-1">
+                      <span className="font-display text-xs font-bold text-wine-800 dark:text-white">
+                        Cash on Delivery (COD)
+                      </span>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                        Pay cash directly to the delivery partner upon arrival.
+                      </p>
+                    </div>
+                  </div>
+                </label>
               </div>
             </div>
           </div>
@@ -752,13 +870,13 @@ export default function CheckoutPage() {
                 </div>
 
                 {orderError && (
-                  <div className="mt-4 rounded-2xl bg-red-50 p-3 text-xs text-red-700 flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 shrink-0" />
+                  <div className="mt-4 rounded-2xl bg-red-50 p-3 text-xs text-red-700 flex items-center gap-2 dark:bg-red-950/40 dark:text-red-300">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
                     <span>{orderError}</span>
                   </div>
                 )}
 
-                {/* Final Place Order Button */}
+                {/* Final Place Order / Pay Now Button */}
                 <button
                   onClick={handlePlaceOrder}
                   disabled={placingOrder}
@@ -766,11 +884,17 @@ export default function CheckoutPage() {
                 >
                   {placingOrder ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin" /> Processing Payment...
+                      <Loader2 className="h-4 w-4 animate-spin" /> Processing Order...
                     </>
                   ) : (
                     <>
-                      {paymentMethod === 'razorpay' ? 'PAY NOW WITH RAZORPAY' : 'PLACE ORDER (COD)'} ({formatPrice(finalTotal)})
+                      {paymentMethod === 'upi'
+                        ? `PAY NOW VIA UPI (${formatPrice(remainingPayableTotal)})`
+                        : paymentMethod === 'razorpay'
+                        ? `PAY NOW WITH RAZORPAY (${formatPrice(remainingPayableTotal)})`
+                        : paymentMethod === 'cod'
+                        ? `PLACE ORDER (COD ${formatPrice(remainingPayableTotal)})`
+                        : `SELECT PAYMENT METHOD (${formatPrice(remainingPayableTotal)})`}
                       <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                     </>
                   )}
@@ -778,7 +902,7 @@ export default function CheckoutPage() {
 
                 <div className="mt-4 text-center">
                   <span className="text-[11px] text-gray-500 dark:text-gray-400 flex items-center justify-center gap-1">
-                    <Lock className="h-3 w-3 text-sage-600" /> 100% Razorpay Encrypted Checkout
+                    <Lock className="h-3 w-3 text-sage-600" /> 100% Secure Encrypted Checkout
                   </span>
                 </div>
               </div>
@@ -790,11 +914,11 @@ export default function CheckoutPage() {
       {/* Real-time Razorpay Payment Modal Overlay */}
       <RazorpayModal
         isOpen={showRazorpayModal}
-        amount={finalTotal}
+        amount={remainingPayableTotal}
         orderNumber={`GH${Math.floor(100000 + Math.random() * 900000)}`}
-        customerName={customerName}
+        customerName={customerName || selectedAddr?.name || 'Valued Customer'}
         customerEmail={customerEmail || 'customer@ashamper.com'}
-        customerPhone={customerPhone}
+        customerPhone={customerPhone || selectedAddr?.phone || '9876543210'}
         onClose={() => {
           setShowRazorpayModal(false);
           setPlacingOrder(false);
@@ -944,7 +1068,7 @@ export default function CheckoutPage() {
         <div>
           <span className="text-[10px] text-gray-500 dark:text-gray-400 block">Total Amount</span>
           <span className="font-display text-base font-bold text-wine-800 dark:text-gold-300">
-            {formatPrice(finalTotal)}
+            {formatPrice(remainingPayableTotal)}
           </span>
         </div>
 
@@ -953,7 +1077,7 @@ export default function CheckoutPage() {
           disabled={placingOrder}
           className="rounded-full bg-wine-600 px-6 py-3 text-xs font-bold text-white shadow hover:bg-wine-700 disabled:opacity-60 flex items-center gap-2"
         >
-          {placingOrder ? 'Processing...' : paymentMethod === 'razorpay' ? 'PAY NOW' : 'PLACE ORDER'}
+          {placingOrder ? 'Processing...' : paymentMethod ? 'PROCEED TO PAY' : 'SELECT PAYMENT'}
           <ArrowRight className="h-4 w-4" />
         </button>
       </div>
