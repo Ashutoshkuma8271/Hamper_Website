@@ -1,5 +1,6 @@
 import React from 'react';
 import { COUNTRY_CODES } from '@/lib/security';
+import { ChevronDown } from 'lucide-react';
 
 interface CountryPhoneInputProps {
   countryCode: string;
@@ -24,12 +25,18 @@ export default function CountryPhoneInput({
     <div
       className={`flex items-center rounded-2xl border border-cream-300 bg-white transition-all focus-within:border-wine-600 focus-within:ring-2 focus-within:ring-wine-500/20 dark:border-gray-700 dark:bg-gray-800 dark:focus-within:border-wine-400 ${className}`}
     >
-      <div className="flex items-center gap-1.5 px-3.5 py-3 bg-cream-100/70 border-r border-cream-300 dark:bg-gray-700/60 dark:border-gray-600 shrink-0 select-none">
-        <span className="text-base leading-none">{selectedCountry.flag}</span>
+      {/* Compact & Sleek Country Code Trigger Box */}
+      <div className="relative flex items-center gap-1.5 px-3 py-3 bg-cream-100/70 border-r border-cream-300 dark:bg-gray-700/60 dark:border-gray-600 shrink-0 select-none cursor-pointer">
+        <span className="text-base leading-none select-none">{selectedCountry.flag}</span>
+        <span className="font-bold text-xs text-wine-800 dark:text-gold-300 select-none">
+          {selectedCountry.code}
+        </span>
+        <ChevronDown className="h-3 w-3 text-wine-700/60 dark:text-gray-400 pointer-events-none" />
+
         <select
           value={countryCode}
           onChange={(e) => onCountryCodeChange(e.target.value)}
-          className="bg-transparent font-bold text-xs text-wine-800 dark:text-gold-300 outline-none cursor-pointer pr-1 select-none"
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer bg-transparent"
           aria-label="Select Country Code"
         >
           {COUNTRY_CODES.map((c) => (
@@ -40,6 +47,7 @@ export default function CountryPhoneInput({
         </select>
       </div>
 
+      {/* Clean Phone Number Input Field */}
       <input
         type="tel"
         required={required}
