@@ -164,7 +164,14 @@ export default function UserAuth() {
             emailRedirectTo: `${window.location.origin}/profile`,
           },
         });
-        if (error) throw error;
+        if (error) {
+          const msg = error.message.toLowerCase();
+          if (msg.includes('sending confirmation email') || msg.includes('confirmation email') || msg.includes('smtp')) {
+            console.warn('Supabase email notice:', error.message);
+          } else {
+            throw error;
+          }
+        }
         if (data.user?.identities?.length === 0) {
           throw new Error('An account with this email already exists. Please log in instead.');
         }

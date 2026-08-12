@@ -131,7 +131,14 @@ export default function AdminAuth() {
           },
         });
 
-        if (signUpError) throw signUpError;
+        if (signUpError) {
+          const msg = signUpError.message.toLowerCase();
+          if (msg.includes('sending confirmation email') || msg.includes('confirmation email') || msg.includes('smtp')) {
+            console.warn('Supabase email notice:', signUpError.message);
+          } else {
+            throw signUpError;
+          }
+        }
 
         if (data.user?.identities?.length === 0) {
           throw new Error('An account with this email already exists. Please log in instead.');

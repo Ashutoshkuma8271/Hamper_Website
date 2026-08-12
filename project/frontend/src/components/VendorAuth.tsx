@@ -141,7 +141,14 @@ export default function VendorAuth() {
             emailRedirectTo: `${window.location.origin}/vendor`,
           },
         });
-        if (error) throw error;
+        if (error) {
+          const msg = error.message.toLowerCase();
+          if (msg.includes('sending confirmation email') || msg.includes('confirmation email') || msg.includes('smtp')) {
+            console.warn('Supabase email notice:', error.message);
+          } else {
+            throw error;
+          }
+        }
         sessionStorage.setItem('a_s_hamper_verify_email', email);
         sessionStorage.setItem('a_s_hamper_verify_role', 'vendor');
         navigate(`/verify-email?email=${encodeURIComponent(email)}&role=vendor`);
@@ -265,17 +272,25 @@ export default function VendorAuth() {
         </Field>
 
         <Field icon={<Lock className="h-4 w-4" />} label="Password">
-          <input
-            type="password"
-            required
-            autoComplete="new-password"
-            minLength={6}
+          <PasswordField
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="At least 6 characters"
-            className="input"
+            onChange={setPassword}
+            autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+            showStrength={mode === 'signup'}
+            placeholder={mode === 'signup' ? 'Create a strong password' : 'Your password'}
           />
         </Field>
+
+        {mode === 'signup' && (
+          <Field icon={<Lock className="h-4 w-4" />} label="Confirm Password">
+            <PasswordField
+              value={confirmPassword}
+              onChange={setConfirmPassword}
+              autoComplete="new-password"
+              placeholder="Re-enter password"
+            />
+          </Field>
+        )}
 
         {mode === 'login' && (
           <div className="flex justify-end">
@@ -289,25 +304,28 @@ export default function VendorAuth() {
         )}
 
         {mode === 'signup' && (
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Field icon={<Hash className="h-4 w-4" />} label="Shop no.">
-              <input
-                required
-                value={shopNo}
-                onChange={(e) => setShopNo(e.target.value)}
-                placeholder="SHOP-0142"
-                className="input"
-              />
-            </Field>
-            <Field icon={<FileText className="h-4 w-4" />} label="GST no.">
-              <input
-                required
-                value={gstNo}
-                onChange={(e) => setGstNo(e.target.value)}
-                placeholder="29ABCDE1234F1Z5"
-                className="input"
-              />
-            </Field>
+          <div className="space-y-4 pt-1">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Field icon={<Hash className="h-4 w-4" />} label="Shop no.">
+                <input
+                  required
+                  value={shopNo}
+                  onChange={(e) => setShopNo(e.target.value)}
+                  placeholder="SHOP-0142"
+                  className="input"
+                />
+              </Field>
+              <Field icon={<FileText className="h-4 w-4" />} label="GST no.">
+                <input
+                  required
+                  value={gstNo}
+                  onChange={(e) => setGstNo(e.target.value)}
+                  placeholder="29ABCDE1234F1Z5"
+                  className="input"
+                />
+              </Field>
+            </div>
+
             <Field icon={<Phone className="h-4 w-4" />} label="Mobile Number">
               <CountryPhoneInput
                 countryCode={countryCode}
@@ -317,21 +335,17 @@ export default function VendorAuth() {
               />
             </Field>
 
-            <Field icon={<Lock className="h-4 w-4" />} label="Confirm Password">
-              <PasswordField value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" placeholder="Re-enter password" />
-            </Field>
-
             <Field icon={<Store className="h-4 w-4" />} label="Business Address">
               <input
                 required
                 value={businessAddress}
                 onChange={(e) => setBusinessAddress(e.target.value)}
-                placeholder="Shop Address / Street"
-                className="input text-xs"
+                placeholder="Shop Address / Street / Building"
+                className="input text-xs w-full"
               />
             </Field>
 
-            <div className="grid grid-cols-3 gap-2 sm:col-span-2">
+            <div className="grid grid-cols-3 gap-2">
               <Field icon={<Store className="h-4 w-4" />} label="City">
                 <input
                   required
