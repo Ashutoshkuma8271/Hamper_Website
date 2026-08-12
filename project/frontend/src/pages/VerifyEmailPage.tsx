@@ -87,12 +87,17 @@ export default function VerifyEmailPage() {
         email: email.trim(),
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.message.toLowerCase().includes('rate limit') || error.message.toLowerCase().includes('email rate')) {
+          throw new Error('Supabase default email rate limit exceeded (max 3/hour). Please check your Spam folder or enable Custom Gmail SMTP in Supabase Dashboard.');
+        }
+        throw error;
+      }
 
-      toast.success('A new 6-digit OTP code has been sent to your Gmail address!', { icon: '📧' });
+      toast.success('A new 6-digit OTP code has been dispatched to your Gmail address!', { icon: '📧' });
       setCooldown(60);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to resend OTP. Please try again.');
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to resend OTP. Please check your Gmail Spam folder.');
     } finally {
       setResending(false);
     }
@@ -240,7 +245,19 @@ export default function VerifyEmailPage() {
               </form>
 
               {/* Resend Cooldown Section */}
-              <div className="mt-6 border-t border-cream-200 dark:border-gray-700 pt-4 text-center text-xs space-y-2">
+              <div className="mt-6 border-t border-cream-200 dark:border-gray-700 pt-4 text-center text-xs space-y-3">
+                <div className="rounded-2xl bg-amber-500/10 border border-amber-500/30 p-3.5 text-left text-[11px] text-amber-900 dark:text-amber-200 space-y-1">
+                  <p className="font-bold flex items-center gap-1.5 text-wine-800 dark:text-gold-300">
+                    <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                    Not seeing the OTP email in your inbox?
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-gray-600 dark:text-gray-300 text-[11px] pl-1">
+                    <li>Check your Gmail <strong>Spam / Junk</strong> folder.</li>
+                    <li>Verify your registered email address: <strong className="text-wine-700 dark:text-gold-300">{email || 'your email'}</strong>.</li>
+                    <li>If using default Supabase SMTP, standard limit is 3-4 emails/hour. Enable Custom Gmail SMTP in Supabase Dashboard for unlimited instant emails.</li>
+                  </ul>
+                </div>
+
                 <p className="text-gray-500 dark:text-gray-400">Didn't receive the OTP code?</p>
                 <button
                   type="button"
