@@ -59,7 +59,23 @@ export default function VendorDashboard({
   onSignOut?: () => void;
 }) {
   const { profile, session, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<VendorTab>('overview');
+  const [activeTab, setActiveTab] = useState<VendorTab>(() => {
+    try {
+      const saved = localStorage.getItem('as_hamper_vendor_active_tab') as VendorTab | null;
+      if (saved) return saved;
+    } catch (e) {
+      // ignore
+    }
+    return 'overview';
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('as_hamper_vendor_active_tab', activeTab);
+    } catch (e) {
+      // ignore
+    }
+  }, [activeTab]);
 
   const vendorId = profile?.id || session?.user?.id || 'v-demo-01';
   const vendorName = profile?.business_name || 'A_S Artisan Gifting';

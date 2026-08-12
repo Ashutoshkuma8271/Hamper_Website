@@ -243,7 +243,9 @@ export default function CheckoutPage() {
 
   // Process Final Order Creation in Database & LocalStorage
   const createOrderRecord = async (payMethod: string, payStatus: string, razorpayPaymentId?: string) => {
-    const cleanMobile = customerPhone.replace(/\D/g, '').slice(-10);
+    const finalCustomerName = selectedAddr?.name || customerName || profile?.full_name || session?.user?.user_metadata?.full_name || 'Valued Customer';
+    const finalCustomerPhone = (selectedAddr?.phone || customerPhone || profile?.phone || '9876543210').replace(/\D/g, '').slice(-10);
+    const finalCustomerEmail = session?.user?.email || customerEmail || 'guest@ashamper.com';
     const orderNum = `GH${Math.floor(100000 + Math.random() * 900000)}`;
 
     if (maxWalletUsable > 0 && session?.user?.id) {
@@ -253,9 +255,9 @@ export default function CheckoutPage() {
     const orderData = {
       order_number: orderNum,
       customer_id: session?.user?.id || null,
-      customer_name: customerName,
-      customer_email: customerEmail || 'guest@ashamper.com',
-      customer_phone: cleanMobile,
+      customer_name: finalCustomerName,
+      customer_email: finalCustomerEmail,
+      customer_phone: finalCustomerPhone,
       address: `${selectedAddr.flat}, ${selectedAddr.street}, ${selectedAddr.city}, ${selectedAddr.state} - ${selectedAddr.pincode}`,
       items: items.map((i) => ({
         product_id: i.product.id,
@@ -441,84 +443,7 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* 1. Customer Information Section */}
-            <div className="rounded-3xl border border-cream-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-              <div className="flex items-center justify-between border-b border-cream-200 dark:border-gray-700 pb-3">
-                <h2 className="font-display text-base font-bold text-wine-800 dark:text-white flex items-center gap-2">
-                  <User className="h-4 w-4 text-gold-600" /> Customer Information
-                </h2>
-                {session ? (
-                  <span className="text-xs font-semibold text-sage-600 dark:text-sage-400 flex items-center gap-1">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Logged In
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setShowAuthModal(true)}
-                    className="text-xs font-semibold text-wine-600 dark:text-gold-300 underline"
-                  >
-                    Log in for faster checkout
-                  </button>
-                )}
-              </div>
-
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400 mb-1">
-                    Full Name *
-                  </label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <input
-                      type="text"
-                      required
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder="Ashutosh Kumar"
-                      className="w-full rounded-2xl border border-cream-300 bg-cream-50/50 pl-10 pr-4 py-2.5 text-xs text-ink-800 outline-none focus:border-wine-600 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400 mb-1">
-                    Mobile Number (10-digit) *
-                  </label>
-                  <div className="relative flex items-center">
-                    <span className="absolute left-3 font-semibold text-xs text-gray-500 select-none">
-                      +91
-                    </span>
-                    <input
-                      type="tel"
-                      required
-                      maxLength={10}
-                      value={customerPhone}
-                      onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, ''))}
-                      placeholder="9876543210"
-                      className="w-full rounded-2xl border border-cream-300 bg-cream-50/50 pl-12 pr-4 py-2.5 text-xs text-ink-800 outline-none focus:border-wine-600 dark:border-gray-600 dark:bg-gray-700 dark:text-white font-medium"
-                    />
-                  </div>
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400 mb-1">
-                    Email Address
-                  </label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <input
-                      type="email"
-                      value={customerEmail}
-                      onChange={(e) => setCustomerEmail(e.target.value)}
-                      placeholder="you@email.com"
-                      className="w-full rounded-2xl border border-cream-300 bg-cream-50/50 pl-10 pr-4 py-2.5 text-xs text-ink-800 outline-none focus:border-wine-600 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* 2. Delivery Address Manager */}
+            {/* 1. Delivery Address Manager */}
             <div className="rounded-3xl border border-cream-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
               <div className="flex items-center justify-between border-b border-cream-200 dark:border-gray-700 pb-3">
                 <h2 className="font-display text-base font-bold text-wine-800 dark:text-white flex items-center gap-2">

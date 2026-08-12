@@ -17,7 +17,24 @@ type Tab = 'overview' | 'best-sellers' | 'same-day-delivery' | 'vendor-hampers' 
 
 export default function AdminDashboard() {
   const { profile, signOut } = useAuth();
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>(() => {
+    try {
+      const saved = localStorage.getItem('as_hamper_admin_active_tab') as Tab | null;
+      if (saved) return saved;
+    } catch (e) {
+      // ignore
+    }
+    return 'overview';
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('as_hamper_admin_active_tab', tab);
+    } catch (e) {
+      // ignore
+    }
+  }, [tab]);
+
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [customerCount, setCustomerCount] = useState(0);
