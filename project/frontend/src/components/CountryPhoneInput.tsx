@@ -21,13 +21,15 @@ export default function CountryPhoneInput({
   const selectedCountry = COUNTRY_CODES.find((c) => c.code === countryCode) || COUNTRY_CODES[0];
 
   return (
-    <div className={`relative flex items-center ${className}`}>
-      <div className="absolute left-3.5 z-10 flex items-center gap-1">
-        <span className="text-sm select-none">{selectedCountry.flag}</span>
+    <div
+      className={`flex items-center rounded-2xl border border-cream-300 bg-white transition-all focus-within:border-wine-600 focus-within:ring-2 focus-within:ring-wine-500/20 dark:border-gray-700 dark:bg-gray-800 dark:focus-within:border-wine-400 ${className}`}
+    >
+      <div className="flex items-center gap-1.5 px-3.5 py-3 bg-cream-100/70 border-r border-cream-300 dark:bg-gray-700/60 dark:border-gray-600 shrink-0 select-none">
+        <span className="text-base leading-none">{selectedCountry.flag}</span>
         <select
           value={countryCode}
           onChange={(e) => onCountryCodeChange(e.target.value)}
-          className="bg-transparent font-semibold text-xs text-wine-800 dark:text-gold-300 outline-none cursor-pointer pr-1 border-r border-cream-300 dark:border-gray-600 select-none"
+          className="bg-transparent font-bold text-xs text-wine-800 dark:text-gold-300 outline-none cursor-pointer pr-1 select-none"
           aria-label="Select Country Code"
         >
           {COUNTRY_CODES.map((c) => (
@@ -45,8 +47,8 @@ export default function CountryPhoneInput({
         autoComplete="tel-national"
         value={phone}
         onChange={(e) => onPhoneChange(e.target.value.replace(/\D/g, '').slice(0, 12))}
-        placeholder={selectedCountry.code === '+91' ? '10-digit mobile number' : 'Mobile number'}
-        className="input pl-28 w-full"
+        placeholder=""
+        className="w-full bg-transparent px-4 py-3 text-sm font-medium text-ink-800 outline-none dark:text-white"
       />
     </div>
   );
