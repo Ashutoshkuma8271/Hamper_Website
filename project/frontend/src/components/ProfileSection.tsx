@@ -16,8 +16,10 @@ import {
   Upload,
   User,
   Image,
+  CheckCircle2,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import AddressManager from '@/components/AddressManager';
 
 const PRESET_AVATARS = [
   'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=200',
@@ -187,6 +189,12 @@ export default function ProfileSection() {
             <p className="flex items-center gap-1.5 text-xs sm:text-sm text-ink-700/60 dark:text-gray-300 mt-1">
               <Mail className="h-3.5 w-3.5 text-gold-600" />
               {session.user.email}
+              {(session.user.email_confirmed_at || profile.email_verified) && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 px-2.5 py-0.5 text-[10px] font-bold shadow-xs">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  Verified
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -281,6 +289,12 @@ export default function ProfileSection() {
             </p>
           </div>
         </div>
+
+        {!isVendor && (
+          <div className="pt-6 border-t border-cream-200 dark:border-gray-700">
+            <AddressManager userId={profile.id} />
+          </div>
+        )}
 
         <div className="mt-8 flex items-center gap-3">
           {editing ? (

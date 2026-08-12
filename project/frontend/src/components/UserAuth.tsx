@@ -24,9 +24,14 @@ export default function UserAuth() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [countryCode, setCountryCode] = useState('+91');
   const [phone, setPhone] = useState('');
+  const [streetAddress, setStreetAddress] = useState('');
+  const [city, setCity] = useState('');
+  const [stateName, setStateName] = useState('');
+  const [pincode, setPincode] = useState('');
 
   useEffect(() => {
     // Check if session role validation failed or redirect error exists
@@ -128,13 +133,34 @@ export default function UserAuth() {
         if (!phoneValidation.valid) {
           throw new Error(phoneValidation.error || 'Please enter a valid mobile number.');
         }
+        if (password !== confirmPassword) {
+          throw new Error('Password and Confirm Password do not match.');
+        }
         if (!isStrongPassword(password)) throw new Error('Use at least 8 characters with uppercase, lowercase, and a number.');
+        
         const cleanName = sanitizeInput(name);
+        const cleanAddress = sanitizeInput(streetAddress);
+        const cleanCity = sanitizeInput(city);
+        const cleanState = sanitizeInput(stateName);
+        const cleanPincode = pincode.trim();
+
+        if (cleanPincode && !/^[1-9][0-9]{5}$/.test(cleanPincode)) {
+          throw new Error('Please enter a valid 6-digit PIN code.');
+        }
+
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: { account_type: 'user', full_name: cleanName, phone: phoneValidation.fullPhone },
+            data: {
+              account_type: 'user',
+              full_name: cleanName,
+              phone: phoneValidation.fullPhone,
+              address: cleanAddress,
+              city: cleanCity,
+              state: cleanState,
+              pincode: cleanPincode,
+            },
             emailRedirectTo: `${window.location.origin}/profile`,
           },
         });
@@ -142,6 +168,27 @@ export default function UserAuth() {
         if (data.user?.identities?.length === 0) {
           throw new Error('An account with this email already exists. Please log in instead.');
         }
+
+        // Save initial delivery address
+        if (cleanAddress && cleanCity && cleanState && cleanPincode) {
+          try {
+            const { saveDeliveryAddress } = await import('@/lib/addressStore');
+            await saveDeliveryAddress({
+              full_name: cleanName,
+              phone: phoneValidation.fullPhone,
+              house_no: '1',
+              street: cleanAddress,
+              city: cleanCity,
+              state: cleanState,
+              pincode: cleanPincode,
+              address_type: 'Home',
+              is_default: true,
+            }, data.user?.id);
+          } catch (addrErr) {
+            console.warn('Initial address save notice:', addrErr);
+          }
+        }
+
         setShowOtpModal(true);
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -268,6 +315,55 @@ export default function UserAuth() {
         <Field icon={<Lock className="h-4 w-4" />} label="Password">
           <PasswordField value={password} onChange={setPassword} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} showStrength={mode === 'signup'} placeholder={mode === 'signup' ? 'Create a strong password' : 'Your password'} />
         </Field>
+
+        {mode === 'signup' && (
+          <>
+            <Field icon={<Lock className="h-4 w-4" />} label="Confirm Password">
+              <PasswordField value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" placeholder="Re-enter password" />
+            </Field>
+
+            <Field icon={<UserRound className="h-4 w-4" />} label="Street Address">
+              <input
+                required
+                value={streetAddress}
+                onChange={(e) => setStreetAddress(e.target.value)}
+                placeholder="House / Street / Area"
+                className="input text-xs"
+              />
+            </Field>
+
+            <div className="grid grid-cols-3 gap-2">
+              <Field icon={<UserRound className="h-4 w-4" />} label="City">
+                <input
+                  required
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="City"
+                  className="input text-xs"
+                />
+              </Field>
+              <Field icon={<UserRound className="h-4 w-4" />} label="State">
+                <input
+                  required
+                  value={stateName}
+                  onChange={(e) => setStateName(e.target.value)}
+                  placeholder="State"
+                  className="input text-xs"
+                />
+              </Field>
+              <Field icon={<UserRound className="h-4 w-4" />} label="PIN Code">
+                <input
+                  required
+                  maxLength={6}
+                  value={pincode}
+                  onChange={(e) => setPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="6-digit PIN"
+                  className="input text-xs font-mono"
+                />
+              </Field>
+            </div>
+          </>
+        )}
 
         {mode === 'login' && (
           <div className="flex justify-end">

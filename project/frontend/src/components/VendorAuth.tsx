@@ -4,7 +4,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { Link } from 'react-router-dom';
 import { Store, Mail, Lock, UserRound, Phone, FileText, Hash, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
 import { checkRoleCollision, triggerGoogleSignIn, validateSessionRole } from '@/lib/authHelpers';
-import { validatePhoneNumber, validateEmailFormat } from '@/lib/security';
+import { validatePhoneNumber, validateEmailFormat, sanitizeInput } from '@/lib/security';
+import PasswordField, { isStrongPassword } from '@/components/PasswordField';
 import CountryPhoneInput from '@/components/CountryPhoneInput';
 import OtpVerificationModal from '@/components/OtpVerificationModal';
 
@@ -21,11 +22,16 @@ export default function VendorAuth() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [shopNo, setShopNo] = useState('');
   const [gstNo, setGstNo] = useState('');
   const [countryCode, setCountryCode] = useState('+91');
   const [phone, setPhone] = useState('');
+  const [businessAddress, setBusinessAddress] = useState('');
+  const [city, setCity] = useState('');
+  const [stateName, setStateName] = useState('');
+  const [pincode, setPincode] = useState('');
 
   useEffect(() => {
     validateSessionRole().then((roleErr) => {
@@ -102,11 +108,35 @@ export default function VendorAuth() {
         if (!phoneValidation.valid) {
           throw new Error(phoneValidation.error || 'Please enter a valid mobile number.');
         }
+        if (password !== confirmPassword) {
+          throw new Error('Password and Confirm Password do not match.');
+        }
+
+        const cleanBusinessName = sanitizeInput(businessName);
+        const cleanAddress = sanitizeInput(businessAddress);
+        const cleanCity = sanitizeInput(city);
+        const cleanState = sanitizeInput(stateName);
+        const cleanPincode = pincode.trim();
+
+        if (cleanPincode && !/^[1-9][0-9]{5}$/.test(cleanPincode)) {
+          throw new Error('Please enter a valid 6-digit PIN code.');
+        }
+
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: { account_type: 'vendor', business_name: businessName, shop_no: shopNo, gst_no: gstNo, phone: phoneValidation.fullPhone },
+            data: {
+              account_type: 'vendor',
+              business_name: cleanBusinessName,
+              shop_no: shopNo,
+              gst_no: gstNo,
+              phone: phoneValidation.fullPhone,
+              address: cleanAddress,
+              city: cleanCity,
+              state: cleanState,
+              pincode: cleanPincode,
+            },
             emailRedirectTo: `${window.location.origin}/vendor`,
           },
         });
@@ -274,6 +304,51 @@ export default function VendorAuth() {
                 onPhoneChange={setPhone}
               />
             </Field>
+
+            <Field icon={<Lock className="h-4 w-4" />} label="Confirm Password">
+              <PasswordField value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" placeholder="Re-enter password" />
+            </Field>
+
+            <Field icon={<Store className="h-4 w-4" />} label="Business Address">
+              <input
+                required
+                value={businessAddress}
+                onChange={(e) => setBusinessAddress(e.target.value)}
+                placeholder="Shop Address / Street"
+                className="input text-xs"
+              />
+            </Field>
+
+            <div className="grid grid-cols-3 gap-2 sm:col-span-2">
+              <Field icon={<Store className="h-4 w-4" />} label="City">
+                <input
+                  required
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="City"
+                  className="input text-xs"
+                />
+              </Field>
+              <Field icon={<Store className="h-4 w-4" />} label="State">
+                <input
+                  required
+                  value={stateName}
+                  onChange={(e) => setStateName(e.target.value)}
+                  placeholder="State"
+                  className="input text-xs"
+                />
+              </Field>
+              <Field icon={<Store className="h-4 w-4" />} label="PIN Code">
+                <input
+                  required
+                  maxLength={6}
+                  value={pincode}
+                  onChange={(e) => setPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="6-digit PIN"
+                  className="input text-xs font-mono"
+                />
+              </Field>
+            </div>
           </div>
         )}
 

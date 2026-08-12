@@ -1,5 +1,5 @@
 -- ==============================================================================
--- ENTERPRISE ADMIN AUTHENTICATION, DATABASE HARDENING & GMAIL SMTP SETUP
+-- ENTERPRISE AUTHENTICATION, ADDRESS MANAGEMENT & GMAIL SMTP SETUP
 -- ==============================================================================
 
 -- 1. Ensure `profiles` table contains verification & status columns
@@ -11,7 +11,40 @@ ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 -- 2. Create index on role and account_status for lightning fast security lookups
 CREATE INDEX IF NOT EXISTS idx_profiles_role_status ON public.profiles(role, account_status);
 
--- 3. Server-Side Trigger for Role Assignment & Security Hardening
+-- 3. Flipkart / Amazon Style Delivery Addresses Table
+CREATE TABLE IF NOT EXISTS public.user_addresses (
+  id TEXT PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  house_no TEXT NOT NULL,
+  street TEXT NOT NULL,
+  landmark TEXT,
+  city TEXT NOT NULL,
+  state TEXT NOT NULL,
+  pincode VARCHAR(10) NOT NULL,
+  address_type TEXT DEFAULT 'Home' CHECK (address_type IN ('Home', 'Work', 'Other')),
+  is_default BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS on user_addresses
+ALTER TABLE public.user_addresses ENABLE ROW LEVEL SECURITY;
+
+-- Address Policies: Users can view, insert, update, and delete their own addresses
+CREATE POLICY "Users can view their own saved addresses" ON public.user_addresses
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own saved addresses" ON public.user_addresses
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own saved addresses" ON public.user_addresses
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own saved addresses" ON public.user_addresses
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- 4. Server-Side Trigger for Role Assignment & Security Hardening
 -- Prevents standard customer signups from tricking the system into elevating to admin
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
@@ -100,19 +133,21 @@ To configure Gmail SMTP in your Supabase Dashboard:
    - SMTP Password:   [16-character Gmail App Password created in Google Account -> Security -> App Passwords]
 
 4. Under Authentication -> Email Templates -> "Confirm signup":
-   Subject: Admin Email Verification – My Gift Hamper
+   Subject: My Gift Hamper - Email Verification
 
    HTML Body:
    ----------------------------------------------------------------------
-   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #E5E7EB; rounded-radius: 16px;">
-     <h2 style="color: #57222C; margin-bottom: 16px;">Admin Email Verification – My Gift Hamper</h2>
-     <p style="color: #374151; font-size: 15px;">Hello Admin,</p>
-     <p style="color: #374151; font-size: 15px;">Your verification code for My Gift Hamper is:</p>
+   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #E5E7EB; border-radius: 16px;">
+     <h2 style="color: #57222C; margin-bottom: 16px;">My Gift Hamper - Email Verification</h2>
+     <p style="color: #374151; font-size: 15px;">Hello,</p>
+     <p style="color: #374151; font-size: 15px;">Your verification code is:</p>
      <div style="background-color: #FDFBF7; border: 2px dashed #D4AF37; padding: 18px; text-align: center; border-radius: 12px; margin: 20px 0;">
        <span style="font-family: monospace; font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #57222C;">{{ .Token }}</span>
      </div>
      <p style="color: #6B7280; font-size: 13px;">This OTP is valid for a limited time.</p>
-     <p style="color: #6B7280; font-size: 13px;">If you did not request this verification, please ignore this email.</p>
+     <p style="color: #6B7280; font-size: 13px;">Please do not share this code with anyone.</p>
+     <br/>
+     <p style="color: #57222C; font-weight: bold;">Thank you,<br/>My Gift Hamper</p>
    </div>
    ----------------------------------------------------------------------
 */

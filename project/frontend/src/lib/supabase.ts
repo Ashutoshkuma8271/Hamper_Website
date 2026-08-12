@@ -22,6 +22,8 @@ export type Profile = {
   gst_no: string | null;
   phone: string | null;
   avatar_url?: string | null;
+  email_verified?: boolean;
+  account_status?: string;
   admin_requested?: boolean;
   created_at: string;
 };
