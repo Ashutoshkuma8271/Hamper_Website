@@ -18,32 +18,42 @@ type WishlistContextValue = {
 };
 
 const WishlistContext = createContext<WishlistContextValue | null>(null);
-const WISHLIST_STORAGE_KEY = 'as_hamper_wishlist_v1';
+const WISHLIST_STORAGE_BASE = 'as_hamper_wishlist_v3';
+
+function getWishlistKey(userId?: string): string {
+  return userId ? `${WISHLIST_STORAGE_BASE}_user_${userId}` : `${WISHLIST_STORAGE_BASE}_guest`;
+}
 
 export function WishlistProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
+  const userId = session?.user?.id;
   const { add } = useCart();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Local storage state for guest or offline mode
-  const [items, setItems] = useState<CartProduct[]>(() => {
-    try {
-      const saved = localStorage.getItem(WISHLIST_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  // User-scoped wishlist state
+  const [items, setItems] = useState<CartProduct[]>([]);
 
-  // Sync to local storage for guests
+  // Load wishlist items whenever user session changes
   useEffect(() => {
     try {
-      localStorage.setItem(WISHLIST_STORAGE_KEY, JSON.stringify(items));
+      const key = getWishlistKey(userId);
+      const saved = localStorage.getItem(key);
+      setItems(saved ? JSON.parse(saved) : []);
+    } catch {
+      setItems([]);
+    }
+  }, [userId]);
+
+  // Sync to local storage per user ID
+  useEffect(() => {
+    try {
+      const key = getWishlistKey(userId);
+      localStorage.setItem(key, JSON.stringify(items));
     } catch (err) {
       console.error('Error saving wishlist to localStorage:', err);
     }
-  }, [items]);
+  }, [items, userId]);
 
   // Load and merge user wishlist from Supabase upon authentication (Requirements 13 & 14)
   useEffect(() => {

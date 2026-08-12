@@ -17,10 +17,14 @@ export interface DeliveryAddress {
   created_at?: string;
 }
 
-const LOCAL_STORAGE_KEY = 'a_s_hamper_saved_addresses';
+const LOCAL_STORAGE_KEY = 'a_s_hamper_user_addresses_v3';
 
 function getStorageKey(userId?: string): string {
-  return userId ? `${LOCAL_STORAGE_KEY}_${userId}` : `${LOCAL_STORAGE_KEY}_guest`;
+  try {
+    // Purge legacy un-scoped storage key
+    localStorage.removeItem('a_s_hamper_saved_addresses');
+  } catch {}
+  return userId ? `${LOCAL_STORAGE_KEY}_user_${userId}` : `${LOCAL_STORAGE_KEY}_guest`;
 }
 
 /**

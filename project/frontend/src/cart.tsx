@@ -67,49 +67,69 @@ type CartContextValue = {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
-const CART_STORAGE_KEY = 'as_hamper_cart_v2';
-const COUPON_STORAGE_KEY = 'as_hamper_coupon_v2';
+import { useAuth } from '@/hooks/useAuth';
+
+const CART_STORAGE_BASE = 'as_hamper_cart_v3';
+const COUPON_STORAGE_BASE = 'as_hamper_coupon_v3';
+
+function getCartKey(userId?: string): string {
+  return userId ? `${CART_STORAGE_BASE}_user_${userId}` : `${CART_STORAGE_BASE}_guest`;
+}
+
+function getCouponKey(userId?: string): string {
+  return userId ? `${COUPON_STORAGE_BASE}_user_${userId}` : `${COUPON_STORAGE_BASE}_guest`;
+}
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(CART_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const { session } = useAuth();
+  const userId = session?.user?.id;
 
-  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(() => {
-    try {
-      const saved = localStorage.getItem(COUPON_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
-
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
+  // Sync / load user-scoped cart items on mount & session changes
   useEffect(() => {
     try {
-      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+      const key = getCartKey(userId);
+      const saved = localStorage.getItem(key);
+      setItems(saved ? JSON.parse(saved) : []);
+    } catch {
+      setItems([]);
+    }
+
+    try {
+      const couponKey = getCouponKey(userId);
+      const savedCoupon = localStorage.getItem(couponKey);
+      setAppliedCoupon(savedCoupon ? JSON.parse(savedCoupon) : null);
+    } catch {
+      setAppliedCoupon(null);
+    }
+  }, [userId]);
+
+  // Save cart items whenever items state updates
+  useEffect(() => {
+    try {
+      const key = getCartKey(userId);
+      localStorage.setItem(key, JSON.stringify(items));
     } catch (err) {
       console.error('Error saving cart to localStorage:', err);
     }
-  }, [items]);
+  }, [items, userId]);
 
+  // Save coupon whenever appliedCoupon updates
   useEffect(() => {
     try {
+      const couponKey = getCouponKey(userId);
       if (appliedCoupon) {
-        localStorage.setItem(COUPON_STORAGE_KEY, JSON.stringify(appliedCoupon));
+        localStorage.setItem(couponKey, JSON.stringify(appliedCoupon));
       } else {
-        localStorage.removeItem(COUPON_STORAGE_KEY);
+        localStorage.removeItem(couponKey);
       }
     } catch (err) {
       console.error('Error saving coupon to localStorage:', err);
     }
-  }, [appliedCoupon]);
+  }, [appliedCoupon, userId]);
 
   const add = (product: CartProduct) => {
     setItems((prev) => {
