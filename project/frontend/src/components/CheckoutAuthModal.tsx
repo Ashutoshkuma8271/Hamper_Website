@@ -3,7 +3,8 @@ import { X, Mail, Lock, UserRound, Phone, ArrowRight, Loader2, CheckCircle2 } fr
 import { supabase } from '@/lib/supabase';
 import PasswordField, { isStrongPassword } from '@/components/PasswordField';
 import { triggerGoogleSignIn } from '@/lib/authHelpers';
-import { sanitizeInput, validateIndianPhone } from '@/lib/security';
+import { sanitizeInput, validatePhoneNumber, validateEmailFormat } from '@/lib/security';
+import CountryPhoneInput from '@/components/CountryPhoneInput';
 
 type Mode = 'login' | 'signup';
 
@@ -22,6 +23,7 @@ export default function CheckoutAuthModal({ isOpen, onClose, onContinueAsGuest }
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [countryCode, setCountryCode] = useState('+91');
   const [phone, setPhone] = useState('');
 
   if (!isOpen) return null;
@@ -49,10 +51,14 @@ export default function CheckoutAuthModal({ isOpen, onClose, onContinueAsGuest }
     }
 
     try {
+      if (!validateEmailFormat(email)) {
+        throw new Error('Please enter a valid email address (e.g. name@gmail.com).');
+      }
+
       if (mode === 'signup') {
-        const phoneValidation = validateIndianPhone(phone);
+        const phoneValidation = validatePhoneNumber(phone, countryCode);
         if (!phoneValidation.valid) {
-          throw new Error(phoneValidation.error || 'Please enter a valid 10-digit mobile number.');
+          throw new Error(phoneValidation.error || 'Please enter a valid mobile number.');
         }
         if (!isStrongPassword(password)) {
           throw new Error('Password must be at least 8 characters with letters & numbers.');
@@ -63,7 +69,7 @@ export default function CheckoutAuthModal({ isOpen, onClose, onContinueAsGuest }
           email,
           password,
           options: {
-            data: { account_type: 'user', full_name: cleanName, phone: phoneValidation.cleanPhone },
+            data: { account_type: 'user', full_name: cleanName, phone: phoneValidation.fullPhone },
             emailRedirectTo: `${window.location.origin}/checkout`,
           },
         });
@@ -156,21 +162,12 @@ export default function CheckoutAuthModal({ isOpen, onClose, onContinueAsGuest }
           {mode === 'signup' && (
             <div>
               <label className="block text-xs font-semibold text-ink-700/70 dark:text-gray-300 mb-1">Mobile Number</label>
-              <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-xs text-wine-700 dark:text-gold-300 select-none">
-                  +91
-                </span>
-                <input
-                  required
-                  type="tel"
-                  maxLength={10}
-                  pattern="[6-9][0-9]{9}"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  placeholder=""
-                  className="w-full rounded-2xl border border-cream-300 bg-white pl-11 pr-4 py-2.5 text-sm text-ink-800 dark:border-gray-700 dark:bg-gray-700 dark:text-white"
-                />
-              </div>
+              <CountryPhoneInput
+                countryCode={countryCode}
+                onCountryCodeChange={setCountryCode}
+                phone={phone}
+                onPhoneChange={setPhone}
+              />
             </div>
           )}
 

@@ -4,6 +4,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { Link } from 'react-router-dom';
 import { Store, Mail, Lock, UserRound, Phone, FileText, Hash, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
 import { checkRoleCollision, triggerGoogleSignIn, validateSessionRole } from '@/lib/authHelpers';
+import { validatePhoneNumber, validateEmailFormat } from '@/lib/security';
+import CountryPhoneInput from '@/components/CountryPhoneInput';
+import OtpVerificationModal from '@/components/OtpVerificationModal';
 
 type Mode = 'login' | 'signup';
 
@@ -14,12 +17,14 @@ export default function VendorAuth() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [showOtpModal, setShowOtpModal] = useState(false);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [shopNo, setShopNo] = useState('');
   const [gstNo, setGstNo] = useState('');
+  const [countryCode, setCountryCode] = useState('+91');
   const [phone, setPhone] = useState('');
 
   useEffect(() => {
@@ -81,7 +86,10 @@ export default function VendorAuth() {
     }
 
     try {
-      // Check cross-role collision before attempting login/signup
+      if (!validateEmailFormat(email)) {
+        throw new Error('Please enter a valid email address (e.g. business@gmail.com).');
+      }
+
       const collisionMsg = await checkRoleCollision(email, 'vendor');
       if (collisionMsg) {
         setError(collisionMsg);
@@ -90,23 +98,20 @@ export default function VendorAuth() {
       }
 
       if (mode === 'signup') {
-        const cleanPhone = phone.replace(/\D/g, '');
-        if (cleanPhone.length !== 10) {
-          throw new Error('Please enter a valid 10-digit mobile number.');
-        }
-        if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
-          throw new Error('Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.');
+        const phoneValidation = validatePhoneNumber(phone, countryCode);
+        if (!phoneValidation.valid) {
+          throw new Error(phoneValidation.error || 'Please enter a valid mobile number.');
         }
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: { account_type: 'vendor', business_name: businessName, shop_no: shopNo, gst_no: gstNo, phone: cleanPhone },
+            data: { account_type: 'vendor', business_name: businessName, shop_no: shopNo, gst_no: gstNo, phone: phoneValidation.fullPhone },
             emailRedirectTo: `${window.location.origin}/vendor`,
           },
         });
         if (error) throw error;
-        setDone(true);
+        setShowOtpModal(true);
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -262,21 +267,12 @@ export default function VendorAuth() {
               />
             </Field>
             <Field icon={<Phone className="h-4 w-4" />} label="Mobile Number">
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-xs text-wine-700 dark:text-gold-300 select-none">
-                  +91
-                </span>
-                <input
-                  type="tel"
-                  required
-                  maxLength={10}
-                  pattern="[6-9][0-9]{9}"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  placeholder=""
-                  className="input pl-12"
-                />
-              </div>
+              <CountryPhoneInput
+                countryCode={countryCode}
+                onCountryCodeChange={setCountryCode}
+                phone={phone}
+                onPhoneChange={setPhone}
+              />
             </Field>
           </div>
         )}
@@ -339,6 +335,17 @@ export default function VendorAuth() {
           )}
           Google
         </button>
+
+        <OtpVerificationModal
+          isOpen={showOtpModal}
+          email={email}
+          phone={`${countryCode}${phone}`}
+          onSuccess={() => {
+            setShowOtpModal(false);
+            setDone(true);
+          }}
+          onClose={() => setShowOtpModal(false)}
+        />
       </form>
     </div>
   );

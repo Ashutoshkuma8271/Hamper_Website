@@ -5,7 +5,9 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Phone, UserRound, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
 import PasswordField, { isStrongPassword } from '@/components/PasswordField';
 import { checkRoleCollision, triggerGoogleSignIn, validateSessionRole } from '@/lib/authHelpers';
-import { sanitizeInput, validateIndianPhone } from '@/lib/security';
+import { sanitizeInput, validatePhoneNumber, validateEmailFormat } from '@/lib/security';
+import CountryPhoneInput from '@/components/CountryPhoneInput';
+import OtpVerificationModal from '@/components/OtpVerificationModal';
 
 type Mode = 'login' | 'signup';
 
@@ -18,10 +20,12 @@ export default function UserAuth() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [showOtpModal, setShowOtpModal] = useState(false);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [countryCode, setCountryCode] = useState('+91');
   const [phone, setPhone] = useState('');
 
   useEffect(() => {
@@ -107,8 +111,7 @@ export default function UserAuth() {
     }
 
     try {
-      const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-      if (!EMAIL_REGEX.test(email.trim())) {
+      if (!validateEmailFormat(email)) {
         throw new Error('Please enter a valid email address (e.g. name@gmail.com).');
       }
 
@@ -121,9 +124,9 @@ export default function UserAuth() {
       }
 
       if (mode === 'signup') {
-        const phoneValidation = validateIndianPhone(phone);
+        const phoneValidation = validatePhoneNumber(phone, countryCode);
         if (!phoneValidation.valid) {
-          throw new Error(phoneValidation.error || 'Please enter a valid 10-digit mobile number.');
+          throw new Error(phoneValidation.error || 'Please enter a valid mobile number.');
         }
         if (!isStrongPassword(password)) throw new Error('Use at least 8 characters with uppercase, lowercase, and a number.');
         const cleanName = sanitizeInput(name);
@@ -131,7 +134,7 @@ export default function UserAuth() {
           email,
           password,
           options: {
-            data: { account_type: 'user', full_name: cleanName, phone: phoneValidation.cleanPhone },
+            data: { account_type: 'user', full_name: cleanName, phone: phoneValidation.fullPhone },
             emailRedirectTo: `${window.location.origin}/profile`,
           },
         });
@@ -139,7 +142,7 @@ export default function UserAuth() {
         if (data.user?.identities?.length === 0) {
           throw new Error('An account with this email already exists. Please log in instead.');
         }
-        setDone(true);
+        setShowOtpModal(true);
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -241,22 +244,12 @@ export default function UserAuth() {
 
         {mode === 'signup' && (
           <Field icon={<Phone className="h-4 w-4" />} label="Mobile Number">
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-xs text-wine-700 dark:text-gold-300 select-none">
-                +91
-              </span>
-              <input
-                type="tel"
-                required
-                maxLength={10}
-                pattern="[6-9][0-9]{9}"
-                autoComplete="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                placeholder=""
-                className="input pl-12"
-              />
-            </div>
+            <CountryPhoneInput
+              countryCode={countryCode}
+              onCountryCodeChange={setCountryCode}
+              phone={phone}
+              onPhoneChange={setPhone}
+            />
           </Field>
         )}
 
@@ -345,6 +338,16 @@ export default function UserAuth() {
           )}
           Google
         </button>
+        <OtpVerificationModal
+          isOpen={showOtpModal}
+          email={email}
+          phone={`${countryCode}${phone}`}
+          onSuccess={() => {
+            setShowOtpModal(false);
+            setDone(true);
+          }}
+          onClose={() => setShowOtpModal(false)}
+        />
       </form>
     </div>
   );

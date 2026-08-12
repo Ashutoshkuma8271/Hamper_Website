@@ -1,7 +1,27 @@
 /**
- * Enterprise Cyber Security & Input Sanitization Engine
- * Protects against XSS, Injection Attacks, Data Tampering, and Malicious Payloads
+ * Enterprise Cyber Security, Country Code Registry & Validation Engine
  */
+
+export interface CountryCodeOption {
+  code: string;
+  country: string;
+  flag: string;
+  digits: number;
+  pattern?: RegExp;
+}
+
+export const COUNTRY_CODES: CountryCodeOption[] = [
+  { code: '+91', country: 'India', flag: '🇮🇳', digits: 10, pattern: /^[6-9]\d{9}$/ },
+  { code: '+1', country: 'United States / Canada', flag: '🇺🇸', digits: 10 },
+  { code: '+44', country: 'United Kingdom', flag: '🇬🇧', digits: 10 },
+  { code: '+971', country: 'UAE', flag: '🇦🇪', digits: 9 },
+  { code: '+65', country: 'Singapore', flag: '🇸🇬', digits: 8 },
+  { code: '+61', country: 'Australia', flag: '🇦🇺', digits: 9 },
+  { code: '+966', country: 'Saudi Arabia', flag: '🇸🇦', digits: 9 },
+  { code: '+974', country: 'Qatar', flag: '🇶🇦', digits: 8 },
+  { code: '+965', country: 'Kuwait', flag: '🇰🇼', digits: 8 },
+  { code: '+49', country: 'Germany', flag: '🇩🇪', digits: 10 },
+];
 
 /**
  * Sanitizes raw string input against Cross-Site Scripting (XSS) and injection attacks
@@ -19,22 +39,42 @@ export function sanitizeInput(input: string): string {
 }
 
 /**
- * Validates a 10-digit Indian Mobile Number (6000000000 to 9999999999)
+ * Validates a mobile number according to the selected country code
  */
-export function validateIndianPhone(phone: string): { valid: boolean; cleanPhone: string; error?: string } {
+export function validatePhoneNumber(phone: string, countryCode = '+91'): { valid: boolean; cleanPhone: string; fullPhone: string; error?: string } {
   const cleanPhone = phone.replace(/\D/g, '');
-  if (cleanPhone.length !== 10) {
-    return { valid: false, cleanPhone, error: 'Mobile number must be exactly 10 digits.' };
+  const country = COUNTRY_CODES.find((c) => c.code === countryCode) || COUNTRY_CODES[0];
+
+  if (!cleanPhone) {
+    return { valid: false, cleanPhone: '', fullPhone: '', error: 'Mobile number is required.' };
   }
-  if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
-    return { valid: false, cleanPhone, error: 'Mobile number must be a valid 10-digit number starting with 6, 7, 8, or 9.' };
+
+  if (country.code === '+91') {
+    if (cleanPhone.length !== 10) {
+      return { valid: false, cleanPhone, fullPhone: `${country.code}${cleanPhone}`, error: 'Indian mobile number must be exactly 10 digits.' };
+    }
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      return { valid: false, cleanPhone, fullPhone: `${country.code}${cleanPhone}`, error: 'Indian mobile number must start with 6, 7, 8, or 9.' };
+    }
+  } else {
+    if (cleanPhone.length < country.digits - 1 || cleanPhone.length > country.digits + 2) {
+      return { valid: false, cleanPhone, fullPhone: `${country.code}${cleanPhone}`, error: `Please enter a valid ${country.country} mobile number (${country.digits} digits).` };
+    }
   }
-  return { valid: true, cleanPhone };
+
+  return { valid: true, cleanPhone, fullPhone: `${country.code}${cleanPhone}` };
+}
+
+/**
+ * Validates strict RFC email address format
+ */
+export function validateEmailFormat(email: string): boolean {
+  if (!email) return false;
+  return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email.trim());
 }
 
 /**
  * Client-Side In-Memory Rate Limiting Guard
- * Prevents rapid automated form submission spam or brute-force attempts
  */
 const submissionTracker = new Map<string, number>();
 
@@ -42,7 +82,7 @@ export function checkRateLimit(actionKey: string, cooldownMs = 2000): boolean {
   const lastTime = submissionTracker.get(actionKey) || 0;
   const now = Date.now();
   if (now - lastTime < cooldownMs) {
-    return false; // Rate limit exceeded
+    return false;
   }
   submissionTracker.set(actionKey, now);
   return true;
