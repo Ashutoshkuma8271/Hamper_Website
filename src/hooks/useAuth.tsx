@@ -7,7 +7,9 @@ type AuthContextValue = {
   profile: Profile | null;
   loading: boolean;
   isAdmin: boolean;
+  isVendor: boolean;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -17,6 +19,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const fetchProfile = async (userId: string) => {
+    if (!supabase) return null;
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('Error fetching profile from Supabase:', error.message);
+        return null;
+      }
+      return (data as Profile) || null;
+    } catch (err) {
+      console.warn('Profile fetch exception:', err);
+      return null;
+    }
+  };
+
   useEffect(() => {
     if (!supabase) {
       setLoading(false);
@@ -25,18 +47,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
+    // 1. Initial Session Check
+    supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
       if (!mounted) return;
-      setSession(data.session);
-      if (!data.session) setLoading(false);
+      
+      if (currentSession?.user?.id) {
+        setSession(currentSession);
+        const userProf = await fetchProfile(currentSession.user.id);
+        
+        if (!mounted) return;
+        
+        if (userProf) {
+          setProfile(userProf);
+        } else {
+          // If the profile was deleted from DB, immediately clear orphaned session
+          // so the user can register / sign up first cleanly!
+          try {
+            await supabase?.auth.signOut();
+          } catch (e) {
+            // ignore
+          }
+          setSession(null);
+          setProfile(null);
+        }
+      } else {
+        setSession(null);
+        setProfile(null);
+      }
+      setLoading(false);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+
+    // 2. Auth State Change Listener
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, sess) => {
       setSession(sess);
-      if (!sess) {
+      if (sess?.user?.id) {
+        const userProf = await fetchProfile(sess.user.id);
+        if (userProf) {
+          setProfile(userProf);
+        } else {
+          // No profile found - user record deleted from table
+          setProfile(null);
+        }
+      } else {
         setProfile(null);
-        setLoading(false);
       }
+      setLoading(false);
     });
 
     return () => {
@@ -45,21 +101,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // 3. Realtime subscription to profiles table for live updates / role changes / account deletions
   useEffect(() => {
-    if (!session || !supabase) return;
-    let mounted = true;
-    setLoading(true);
-    supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', session.user.id)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (!mounted) return;
-        if (!error && data) setProfile(data as Profile);
-        setLoading(false);
-      });
-  }, [session]);
+    if (!supabase || !session?.user?.id) return;
+
+    const channel = supabase
+      .channel(`profile-${session.user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${session.user.id}`,
+        },
+        async (payload) => {
+          if (payload.eventType === 'DELETE') {
+            // Profile deleted from database in real-time!
+            // Cleanly sign out so user can sign up again
+            await supabase?.auth.signOut();
+            setSession(null);
+            setProfile(null);
+          } else if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+            setProfile(payload.new as Profile);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase?.removeChannel(channel);
+    };
+  }, [session?.user?.id]);
+
+  const refreshProfile = async () => {
+    if (!session?.user?.id || !supabase) return;
+    const p = await fetchProfile(session.user.id);
+    if (p) {
+      setProfile(p);
+    } else {
+      await supabase?.auth.signOut();
+      setSession(null);
+      setProfile(null);
+    }
+  };
+
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -67,9 +153,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       loading,
       isAdmin: profile?.role === 'admin',
+      isVendor: profile?.role === 'vendor',
       signOut: async () => {
-        if (supabase) await supabase.auth.signOut();
+        if (supabase) {
+          try {
+            await supabase.auth.signOut();
+          } catch (e) {
+            console.error('Sign out error:', e);
+          }
+        }
+        // Clear any stored intent or cached tokens
+        try {
+          sessionStorage.removeItem('a_s_hamper_account_intent');
+          sessionStorage.removeItem('a_s_hamper_auth_error');
+        } catch (e) {
+          // ignore
+        }
+        setSession(null);
+        setProfile(null);
       },
+      refreshProfile,
     }),
     [session, profile, loading]
   );
@@ -82,3 +185,4 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
 }
+

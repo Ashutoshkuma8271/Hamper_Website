@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, Sparkles, Loader2, Heart, ArrowRight, Star, Eye, Zap, ShoppingBag } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Sparkles, Heart, ArrowRight, Star, Eye, Zap, ShoppingBag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { products as fallbackProducts, type Product } from '@/data';
 import { supabase } from '@/lib/supabase';
@@ -8,6 +8,7 @@ import { useReveal } from '@/hooks/useReveal';
 import { useWishlist } from '@/hooks/useWishlist';
 import HamperDetailModal from '@/components/HamperDetailModal';
 import LazyImage from '@/components/LazyImage';
+import { HamperGridSkeleton } from '@/components/skeletons';
 
 const filters = [
   { id: 'all', label: 'All Curations' },
@@ -251,8 +252,8 @@ export default function BestSellers({
           }`}
         >
           {loading ? (
-            <div className="col-span-full grid place-items-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-wine-600" />
+            <div className="col-span-full">
+              <HamperGridSkeleton count={4} columns="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" />
             </div>
           ) : list.length === 0 ? (
             <p className="col-span-full text-center text-ink-700/50 py-12 dark:text-gray-400">No hampers in this category yet.</p>
@@ -267,6 +268,7 @@ export default function BestSellers({
             ))
           )}
         </div>
+
         {paginate && !loading && total > pageSize && (
           <nav className="mt-10 flex items-center justify-center gap-3" aria-label="Product pages">
             <button

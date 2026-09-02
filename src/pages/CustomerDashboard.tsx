@@ -39,6 +39,7 @@ import {
   type ReturnRequest,
 } from '@/lib/orderSync';
 import { toast } from 'react-hot-toast';
+import { DashboardSkeleton } from '@/components/skeletons';
 
 type Address = {
   id: string;
@@ -64,6 +65,7 @@ export default function CustomerDashboard() {
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [addingAddress, setAddingAddress] = useState(false);
   const [address, setAddress] = useState({ label: 'Home', address_line: '', city: '', state: '', postal_code: '' });
+  const [loadingData, setLoadingData] = useState(true);
   
   // Wallet & Returns state
   const [walletBalance, setWalletBalance] = useState(0);
@@ -71,23 +73,31 @@ export default function CustomerDashboard() {
   const [userReturns, setUserReturns] = useState<ReturnRequest[]>([]);
 
   const refresh = async () => {
-    if (!supabase || !session?.user?.id) return;
-    const [{ data: orderData }, { data: addressData }] = await Promise.all([
-      supabase.from('orders').select('*').order('created_at', { ascending: false }),
-      supabase.from('customer_addresses').select('*').order('is_default', { ascending: false }),
-    ]);
-    setOrders((orderData || []) as OrderRow[]);
-    setAddresses((addressData || []) as Address[]);
+    if (!supabase || !session?.user?.id) {
+      setLoadingData(false);
+      return;
+    }
+    try {
+      const [{ data: orderData }, { data: addressData }] = await Promise.all([
+        supabase.from('orders').select('*').order('created_at', { ascending: false }),
+        supabase.from('customer_addresses').select('*').order('is_default', { ascending: false }),
+      ]);
+      setOrders((orderData || []) as OrderRow[]);
+      setAddresses((addressData || []) as Address[]);
 
-    const bal = await getWalletBalance(session.user.id);
-    setWalletBalance(bal);
+      const bal = await getWalletBalance(session.user.id);
+      setWalletBalance(bal);
 
-    const txs = await getWalletTransactions(session.user.id);
-    setWalletTxs(txs);
+      const txs = await getWalletTransactions(session.user.id);
+      setWalletTxs(txs);
 
-    const rets = await fetchAllReturnRequests();
-    setUserReturns(rets.filter((r) => r.customer_id === session.user.id));
+      const rets = await fetchAllReturnRequests();
+      setUserReturns(rets.filter((r) => r.customer_id === session.user.id));
+    } finally {
+      setLoadingData(false);
+    }
   };
+
 
   useEffect(() => {
     void refresh();
@@ -198,7 +208,9 @@ export default function CustomerDashboard() {
 
           {/* Main Content Area */}
           <section className="min-w-0">
-            {section === 'addresses' ? (
+            {loadingData ? (
+              <DashboardSkeleton />
+            ) : section === 'addresses' ? (
               <Addresses
                 addresses={addresses}
                 adding={addingAddress}
@@ -208,6 +220,7 @@ export default function CustomerDashboard() {
                 save={saveAddress}
               />
             ) : section === 'orders' ? (
+
               <OrdersTimeline
                 orders={orders}
                 returns={userReturns}

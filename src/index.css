@@ -206,3 +206,9 @@ img {
   box-shadow: 0 0 0 3px rgba(251, 222, 156, 0.2);
 }
 
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+

@@ -23,6 +23,7 @@ import HamperDetailModal from '@/components/HamperDetailModal';
 import LazyImage from '@/components/LazyImage';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
+import { HamperGridSkeleton } from '@/components/skeletons';
 
 export default function BestSellersPage() {
   const navigate = useNavigate();
@@ -385,11 +386,7 @@ export default function BestSellersPage() {
           {/* Product Grid Container */}
           <div className="lg:col-span-3">
             {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} className="rounded-3xl bg-cream-100/60 dark:bg-gray-800 p-4 animate-pulse h-96" />
-                ))}
-              </div>
+              <HamperGridSkeleton count={6} columns="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" />
             ) : filteredProducts.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredProducts.map((product) => {
