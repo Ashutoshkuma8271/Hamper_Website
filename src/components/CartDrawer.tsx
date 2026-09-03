@@ -1,11 +1,13 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { X, Plus, Minus, Trash2, ShoppingBag, ArrowRight } from 'lucide-react';
-import { useCart, formatPrice } from '@/cart';
+import { useCart, formatPrice, type CartItem } from '@/cart';
 import { useNavigate } from 'react-router-dom';
+import ConfirmationDialog from '@/components/ConfirmationDialog';
 
 export default function CartDrawer() {
   const navigate = useNavigate();
   const { items, isOpen, close, setQty, remove, subtotal, count } = useCart();
+  const [itemToRemove, setItemToRemove] = useState<CartItem | null>(null);
 
   useEffect(() => {
     document.body.style.overflow = 'unset';
@@ -95,9 +97,9 @@ export default function CartDrawer() {
                         {item.product.name}
                       </h3>
                       <button
-                        onClick={() => remove(item.product.slug)}
-                        className="text-ink-700/40 hover:text-wine-600 dark:text-gray-400 dark:hover:text-wine-400 transition-colors"
-                        aria-label="Remove"
+                        onClick={() => setItemToRemove(item)}
+                        className="text-ink-700/40 hover:text-wine-600 dark:text-gray-400 dark:hover:text-wine-400 transition-colors p-1 rounded-md"
+                        aria-label="Remove item"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -108,7 +110,13 @@ export default function CartDrawer() {
                     <div className="mt-2 flex items-center gap-2">
                       <div className="inline-flex items-center rounded-full border border-cream-300 bg-cream-50 dark:border-gray-600 dark:bg-gray-700">
                         <button
-                          onClick={() => setQty(item.product.slug, item.qty - 1)}
+                          onClick={() => {
+                            if (item.qty <= 1) {
+                              setItemToRemove(item);
+                            } else {
+                              setQty(item.product.slug, item.qty - 1);
+                            }
+                          }}
                           className="grid place-items-center h-8 w-8 rounded-full hover:bg-cream-200 dark:hover:bg-gray-600 transition-colors"
                           aria-label="Decrease"
                         >
@@ -158,6 +166,25 @@ export default function CartDrawer() {
           </>
         )}
       </aside>
+
+      {/* Reusable Confirmation Dialog for Removing Hamper from Basket */}
+      <ConfirmationDialog
+        isOpen={!!itemToRemove}
+        title="Remove from Cart?"
+        message={`Are you sure you want to remove "${itemToRemove?.product.name}" from your basket?`}
+        confirmText="Remove Item"
+        cancelText="Keep in Basket"
+        variant="danger"
+        itemName={itemToRemove?.product.name}
+        itemImage={itemToRemove?.product.image}
+        onConfirm={() => {
+          if (itemToRemove) {
+            remove(itemToRemove.product.slug);
+            setItemToRemove(null);
+          }
+        }}
+        onCancel={() => setItemToRemove(null)}
+      />
     </>
   );
 }

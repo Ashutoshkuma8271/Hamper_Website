@@ -17,6 +17,7 @@ import {
 import { formatPrice, useCart, type CartProduct } from '@/cart';
 import { useWishlist } from '@/hooks/useWishlist';
 import { LoadingSkeleton } from '@/components/LoadingSkeleton';
+import ConfirmationDialog from '@/components/ConfirmationDialog';
 
 type SortOption = 'recent' | 'price-low' | 'price-high' | 'rating';
 
@@ -26,6 +27,7 @@ export default function WishlistPage() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('recent');
+  const [itemToRemove, setItemToRemove] = useState<CartProduct | null>(null);
 
   // Filter & Sort Logic (Requirements 11 & 12)
   const filteredItems = useMemo(() => {
@@ -179,7 +181,7 @@ export default function WishlistPage() {
                       {/* Active Heart Icon Button (Requirement 5) */}
                       <button
                         type="button"
-                        onClick={() => removeFromWishlist(product.id || product.slug)}
+                        onClick={() => setItemToRemove(product)}
                         aria-label="Remove from wishlist"
                         className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-white/95 text-wine-600 shadow-md backdrop-blur transition-transform active:scale-90 dark:bg-gray-800/95 dark:text-gold-300"
                         title="Remove from Wishlist"
@@ -276,6 +278,25 @@ export default function WishlistPage() {
           </div>
         )}
       </div>
+
+      {/* Confirmation Dialog for Removing from Wishlist */}
+      <ConfirmationDialog
+        isOpen={!!itemToRemove}
+        title="Remove from Wishlist?"
+        message={`Are you sure you want to remove "${itemToRemove?.name}" from your saved wishlist?`}
+        confirmText="Remove"
+        cancelText="Keep in Wishlist"
+        variant="danger"
+        itemName={itemToRemove?.name}
+        itemImage={itemToRemove?.image}
+        onConfirm={() => {
+          if (itemToRemove) {
+            removeFromWishlist(itemToRemove.id || itemToRemove.slug);
+            setItemToRemove(null);
+          }
+        }}
+        onCancel={() => setItemToRemove(null)}
+      />
     </main>
   );
 }
