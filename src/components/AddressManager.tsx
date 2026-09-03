@@ -23,6 +23,7 @@ import {
 } from '@/lib/addressStore';
 import CountryPhoneInput from '@/components/CountryPhoneInput';
 import { toast } from 'react-hot-toast';
+import ConfirmationDialog from '@/components/ConfirmationDialog';
 
 interface AddressManagerProps {
   userId?: string;
@@ -42,6 +43,7 @@ export default function AddressManager({
   const [showModal, setShowModal] = useState(false);
   const [editingAddress, setEditingAddress] = useState<DeliveryAddress | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [addressToDelete, setAddressToDelete] = useState<DeliveryAddress | null>(null);
 
   // Form State
   const [fullName, setFullName] = useState('');
@@ -372,9 +374,7 @@ export default function AddressManager({
                     disabled={deletingId === addr.id}
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (confirm(`Remove address for ${addr.full_name}?`)) {
-                        handleDelete(addr.id);
-                      }
+                      setAddressToDelete(addr);
                     }}
                     className="p-1 text-red-500 hover:text-red-700 dark:text-red-400 transition-colors disabled:opacity-50"
                     title="Delete address"
@@ -616,6 +616,24 @@ export default function AddressManager({
           </div>
         </div>
       )}
+
+      {/* Confirmation Dialog for Deleting Address */}
+      <ConfirmationDialog
+        isOpen={!!addressToDelete}
+        title="Remove Saved Address?"
+        message={`Are you sure you want to remove the address for ${addressToDelete?.full_name}?`}
+        confirmText="Remove Address"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={deletingId === addressToDelete?.id}
+        onConfirm={() => {
+          if (addressToDelete) {
+            handleDelete(addressToDelete.id);
+            setAddressToDelete(null);
+          }
+        }}
+        onCancel={() => setAddressToDelete(null)}
+      />
     </div>
   );
 }

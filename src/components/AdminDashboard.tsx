@@ -5,6 +5,7 @@ import { formatPrice } from '@/cart';
 import { VendorStore, type VendorHamper, type HamperItem } from '@/lib/vendorStore';
 import { AdminSettings, BestSellersAdmin, CouponManagement, Customers, Inventory, Notifications, Reports, ResourceManager, ReviewManagement, SameDayDeliveryAdmin, AdminReturnsManager } from '@/components/AdminOperations';
 import { LoadingSkeleton } from '@/components/LoadingSkeleton';
+import ConfirmationDialog from '@/components/ConfirmationDialog';
 import {
   Package, ShoppingBag, Plus, Pencil, Trash2, X, Loader2, Search, TrendingUp, Save, ShieldCheck, UserPlus, LogOut,
 } from 'lucide-react';
@@ -220,10 +221,15 @@ function Metric({ label, value }: { label: string; value: number }) { return <di
 function Products({ products, onChanged }: { products: Product[]; onChanged: () => void }) {
   const [editing, setEditing] = useState<Product | null>(null);
   const [creating, setCreating] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  async function remove(p: Product) {
-    if (!confirm(`Delete "${p.name}"?`) || !supabase) return;
-    await supabase.from('products').delete().eq('id', p.id);
+  async function confirmDeleteProduct() {
+    if (!productToDelete || !supabase) return;
+    setDeleting(true);
+    await supabase.from('products').delete().eq('id', productToDelete.id);
+    setDeleting(false);
+    setProductToDelete(null);
     onChanged();
   }
 
@@ -262,7 +268,7 @@ function Products({ products, onChanged }: { products: Product[]; onChanged: () 
                   <Pencil className="h-3 w-3" /> Edit
                 </button>
                 <button
-                  onClick={() => remove(p)}
+                  onClick={() => setProductToDelete(p)}
                   className="inline-flex items-center gap-1 rounded-full border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"
                 >
                   <Trash2 className="h-3 w-3" /> Delete
@@ -287,6 +293,21 @@ function Products({ products, onChanged }: { products: Product[]; onChanged: () 
           }}
         />
       )}
+
+      {/* Confirmation Dialog for Deleting Product */}
+      <ConfirmationDialog
+        isOpen={!!productToDelete}
+        title="Delete Product?"
+        message={`Are you sure you want to permanently delete "${productToDelete?.name}"? This action cannot be undone.`}
+        confirmText="Delete Product"
+        cancelText="Cancel"
+        variant="danger"
+        itemName={productToDelete?.name}
+        itemImage={productToDelete?.image}
+        isLoading={deleting}
+        onConfirm={confirmDeleteProduct}
+        onCancel={() => setProductToDelete(null)}
+      />
     </div>
   );
 }
@@ -711,6 +732,8 @@ function AdminVendorHampers() {
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
+  const [hamperToDelete, setHamperToDelete] = useState<VendorHamper | null>(null);
+
   const refresh = () => setHampers(VendorStore.getAllVendorHampers());
 
   const toggleApprovalSetting = () => {
@@ -732,9 +755,10 @@ function AdminVendorHampers() {
     refresh();
   };
 
-  const handleDelete = (id: string) => {
-    if (!confirm('Are you sure you want to delete this vendor hamper?')) return;
-    VendorStore.deleteVendorHamper(id, 'admin');
+  const confirmDeleteHamper = () => {
+    if (!hamperToDelete) return;
+    VendorStore.deleteVendorHamper(hamperToDelete.id, 'admin');
+    setHamperToDelete(null);
     refresh();
   };
 
@@ -867,7 +891,7 @@ function AdminVendorHampers() {
                 )}
 
                 <button
-                  onClick={() => handleDelete(h.id)}
+                  onClick={() => setHamperToDelete(h)}
                   className="rounded-full border border-red-200 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
                 >
                   Delete
@@ -877,6 +901,20 @@ function AdminVendorHampers() {
           ))}
         </div>
       )}
+
+      {/* Confirmation Dialog for Deleting Vendor Hamper */}
+      <ConfirmationDialog
+        isOpen={!!hamperToDelete}
+        title="Delete Vendor Hamper?"
+        message={`Are you sure you want to permanently delete "${hamperToDelete?.name}" submitted by ${hamperToDelete?.vendor_name}?`}
+        confirmText="Delete Hamper"
+        cancelText="Cancel"
+        variant="danger"
+        itemName={hamperToDelete?.name}
+        itemImage={hamperToDelete?.thumbnail}
+        onConfirm={confirmDeleteHamper}
+        onCancel={() => setHamperToDelete(null)}
+      />
 
       {/* Reject Modal */}
       {rejectingId && (

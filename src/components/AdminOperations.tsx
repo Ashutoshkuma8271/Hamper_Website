@@ -4,6 +4,7 @@ import { supabase, type Product, type Profile } from '@/lib/supabase';
 import { formatPrice } from '@/cart';
 import { useAuth } from '@/hooks/useAuth';
 import { LoadingSkeleton } from '@/components/LoadingSkeleton';
+import ConfirmationDialog from '@/components/ConfirmationDialog';
 
 type Kind = 'category' | 'coupon' | 'banner' | 'blog' | 'review' | 'notification';
 type Resource = { id: string; kind: Kind; title: string; subtitle: string | null; image_url: string | null; active: boolean; data: Record<string, any>; created_at: string };
@@ -18,13 +19,122 @@ const config: Record<Kind, { title: string; hint: string; action: string }> = {
 };
 
 export function ResourceManager({ kind }: { kind: Kind }) {
-  const [rows, setRows] = useState<Resource[]>([]); const [editing, setEditing] = useState<Resource | null>(null); const [create, setCreate] = useState(false); const [loading, setLoading] = useState(true);
-  const load = async () => { if (!supabase) return; setLoading(true); const { data } = await supabase.from('admin_resources').select('*').eq('kind', kind).order('created_at', { ascending: false }); setRows((data || []) as Resource[]); setLoading(false); };
+  const [rows, setRows] = useState<Resource[]>([]);
+  const [editing, setEditing] = useState<Resource | null>(null);
+  const [create, setCreate] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [itemToDelete, setItemToDelete] = useState<Resource | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const load = async () => {
+    if (!supabase) return;
+    setLoading(true);
+    const { data } = await supabase.from('admin_resources').select('*').eq('kind', kind).order('created_at', { ascending: false });
+    setRows((data || []) as Resource[]);
+    setLoading(false);
+  };
+
   useEffect(() => { void load(); }, [kind]);
-  const remove = async (id: string) => { if (supabase && confirm('Delete this item?')) { await supabase.from('admin_resources').delete().eq('id', id); void load(); } };
-  const toggle = async (row: Resource) => { if (supabase) { await supabase.from('admin_resources').update({ active: !row.active }).eq('id', row.id); void load(); } };
+
+  const confirmRemove = async () => {
+    if (!itemToDelete || !supabase) return;
+    setDeleting(true);
+    await supabase.from('admin_resources').delete().eq('id', itemToDelete.id);
+    setDeleting(false);
+    setItemToDelete(null);
+    void load();
+  };
+
+  const toggle = async (row: Resource) => {
+    if (supabase) {
+      await supabase.from('admin_resources').update({ active: !row.active }).eq('id', row.id);
+      void load();
+    }
+  };
+
   const c = config[kind];
-  return <section><div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><h2 className="font-display text-2xl font-semibold text-wine-700">{c.title}</h2><p className="mt-1 text-sm text-ink-700/60">{c.hint}</p></div><button onClick={() => setCreate(true)} className="inline-flex items-center gap-2 rounded-full bg-wine-600 px-4 py-2.5 text-sm font-semibold text-white"><Plus className="h-4 w-4" />{c.action}</button></div>{kind === 'banner' && <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">{['Homepage','Promotional','Offers','New arrivals'].map(label => <div key={label} className="rounded-2xl bg-gold-500/10 px-4 py-3 text-center text-sm font-semibold text-gold-600">{label}</div>)}</div>}{loading ? <LoadingSkeleton type="table" count={3} /> : rows.length ? <div className="space-y-3">{rows.map(row => <article key={row.id} className="flex flex-col gap-4 rounded-2xl bg-cream-100/50 p-4 ring-1 ring-cream-200 sm:flex-row sm:items-center"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-wine-600/10 text-wine-700">{kind === 'banner' ? <Image className="h-5 w-5" /> : kind === 'blog' ? <FileText className="h-5 w-5" /> : <Tag className="h-5 w-5" />}</div><div className="min-w-0 flex-1"><h3 className="font-semibold text-wine-700">{row.title}</h3><p className="truncate text-sm text-ink-700/60">{row.subtitle || 'No description added'}</p>{kind === 'banner' && <span className="mt-2 inline-flex rounded-full bg-gold-500/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-gold-600">{row.data?.placement || 'Homepage'}</span>}</div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${row.active ? 'bg-sage-500/15 text-sage-500' : 'bg-cream-200 text-ink-700/60'}`}>{row.active ? (kind === 'blog' ? 'Published' : 'Active') : (kind === 'blog' ? 'Draft' : 'Hidden')}</span><div className="flex gap-2"><button onClick={() => setEditing(row)} className="rounded-full border border-cream-300 px-3 py-1.5 text-xs font-medium">Edit</button><button onClick={() => void toggle(row)} className="rounded-full border border-cream-300 px-3 py-1.5 text-xs font-medium">{row.active ? (kind === 'blog' ? 'Unpublish' : 'Hide') : (kind === 'blog' ? 'Publish' : 'Show')}</button><button onClick={() => void remove(row.id)} className="rounded-full border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600"><Trash2 className="h-3.5 w-3.5" /></button></div></article>)}</div> : <p className="rounded-2xl bg-cream-100/50 p-8 text-center text-sm text-ink-700/60">No {c.title.toLowerCase()} yet.</p>}{(create || editing) && <ResourceModal kind={kind} resource={editing} onClose={() => { setCreate(false); setEditing(null); }} onSaved={() => { setCreate(false); setEditing(null); void load(); }} />}</section>;
+
+  return (
+    <section>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className="font-display text-2xl font-semibold text-wine-700">{c.title}</h2>
+          <p className="mt-1 text-sm text-ink-700/60">{c.hint}</p>
+        </div>
+        <button onClick={() => setCreate(true)} className="inline-flex items-center gap-2 rounded-full bg-wine-600 px-4 py-2.5 text-sm font-semibold text-white">
+          <Plus className="h-4 w-4" />{c.action}
+        </button>
+      </div>
+
+      {kind === 'banner' && (
+        <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {['Homepage','Promotional','Offers','New arrivals'].map(label => (
+            <div key={label} className="rounded-2xl bg-gold-500/10 px-4 py-3 text-center text-sm font-semibold text-gold-600">{label}</div>
+          ))}
+        </div>
+      )}
+
+      {loading ? (
+        <LoadingSkeleton type="table" count={3} />
+      ) : rows.length ? (
+        <div className="space-y-3">
+          {rows.map(row => (
+            <article key={row.id} className="flex flex-col gap-4 rounded-2xl bg-cream-100/50 p-4 ring-1 ring-cream-200 sm:flex-row sm:items-center">
+              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-wine-600/10 text-wine-700">
+                {kind === 'banner' ? <Image className="h-5 w-5" /> : kind === 'blog' ? <FileText className="h-5 w-5" /> : <Tag className="h-5 w-5" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-semibold text-wine-700">{row.title}</h3>
+                <p className="truncate text-sm text-ink-700/60">{row.subtitle || 'No description added'}</p>
+                {kind === 'banner' && (
+                  <span className="mt-2 inline-flex rounded-full bg-gold-500/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-gold-600">
+                    {row.data?.placement || 'Homepage'}
+                  </span>
+                )}
+              </div>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${row.active ? 'bg-sage-500/15 text-sage-500' : 'bg-cream-200 text-ink-700/60'}`}>
+                {row.active ? (kind === 'blog' ? 'Published' : 'Active') : (kind === 'blog' ? 'Draft' : 'Hidden')}
+              </span>
+              <div className="flex gap-2">
+                <button onClick={() => setEditing(row)} className="rounded-full border border-cream-300 px-3 py-1.5 text-xs font-medium">Edit</button>
+                <button onClick={() => void toggle(row)} className="rounded-full border border-cream-300 px-3 py-1.5 text-xs font-medium">
+                  {row.active ? (kind === 'blog' ? 'Unpublish' : 'Hide') : (kind === 'blog' ? 'Publish' : 'Show')}
+                </button>
+                <button onClick={() => setItemToDelete(row)} className="rounded-full border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-2xl bg-cream-100/50 p-8 text-center text-sm text-ink-700/60">No {c.title.toLowerCase()} yet.</p>
+      )}
+
+      {(create || editing) && (
+        <ResourceModal
+          kind={kind}
+          resource={editing}
+          onClose={() => { setCreate(false); setEditing(null); }}
+          onSaved={() => { setCreate(false); setEditing(null); void load(); }}
+        />
+      )}
+
+      {/* Reusable Confirmation Dialog for Resource Deletion */}
+      <ConfirmationDialog
+        isOpen={!!itemToDelete}
+        title={`Delete ${kind === 'blog' ? 'Blog Post' : kind === 'banner' ? 'Banner' : 'Category'}?`}
+        message={`Are you sure you want to delete "${itemToDelete?.title}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        itemName={itemToDelete?.title}
+        isLoading={deleting}
+        onConfirm={confirmRemove}
+        onCancel={() => setItemToDelete(null)}
+      />
+    </section>
+  );
 }
 
 
@@ -36,10 +146,173 @@ function ResourceModal({ kind, resource, onClose, onSaved }: { kind: Kind; resou
 
 export function Customers() { const [customers, setCustomers] = useState<Profile[]>([]); const [query, setQuery] = useState(''); const [selected, setSelected] = useState<any>(null); const [orders, setOrders] = useState<any[]>([]); const load = async () => { if (!supabase) return; const { data } = await supabase.from('profiles').select('*').neq('role', 'admin').order('created_at', { ascending: false }); setCustomers((data || []) as Profile[]); }; useEffect(() => { void load(); }, []); const shown = customers.filter(c => `${c.full_name} ${c.phone}`.toLowerCase().includes(query.toLowerCase())); const toggle = async (c: any) => { if (supabase) { await supabase.from('profiles').update({ is_active: !c.is_active }).eq('id', c.id); void load(); } }; const view = async (c:any) => { setSelected(c); if (!supabase) return; const { data } = await supabase.from('orders').select('*').eq('customer_id',c.id).order('created_at',{ascending:false}); setOrders(data || []); }; return <section><h2 className="font-display text-2xl font-semibold text-wine-700">Customer management</h2><p className="mt-1 text-sm text-ink-700/60">View customer profiles and orders, search customers, and manage account access.</p><label className="mt-6 flex max-w-sm items-center gap-2 rounded-full border border-cream-300 bg-cream-50 px-4 py-2"><Search className="h-4 w-4" /><input className="w-full bg-transparent text-sm outline-none" placeholder="Search name or phone" value={query} onChange={e => setQuery(e.target.value)} /></label><div className="mt-5 grid gap-5 xl:grid-cols-[1fr_.85fr]"><div className="space-y-3">{shown.map((c: any) => <div key={c.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-cream-100/50 p-4 ring-1 ring-cream-200"><button onClick={()=>void view(c)} className="text-left"><p className="font-semibold text-wine-700">{c.full_name || 'Customer'}</p><p className="text-xs text-ink-700/60">{c.phone || 'No phone'} · joined {new Date(c.created_at).toLocaleDateString('en-IN')}</p></button><div className="flex gap-2"><button onClick={()=>void view(c)} className="rounded-full border border-cream-300 px-3 py-1.5 text-xs font-semibold">View profile</button><button onClick={() => void toggle(c)} className="rounded-full border border-cream-300 px-3 py-1.5 text-xs font-semibold">{c.is_active === false ? 'Activate' : 'Deactivate'}</button></div></div>)}</div><aside className="rounded-3xl bg-cream-100/50 p-5 ring-1 ring-cream-200">{selected ? <><h3 className="font-display text-lg font-semibold text-wine-700">Customer profile</h3><dl className="mt-4 space-y-3 text-sm"><div><dt className="text-ink-700/50">Name</dt><dd className="font-medium text-wine-700">{selected.full_name || '—'}</dd></div><div><dt className="text-ink-700/50">Phone</dt><dd className="font-medium text-wine-700">{selected.phone || '—'}</dd></div><div><dt className="text-ink-700/50">Account status</dt><dd className="font-medium text-wine-700">{selected.is_active === false ? 'Deactivated' : 'Active'}</dd></div></dl><h4 className="mt-6 font-display font-semibold text-wine-700">Customer orders ({orders.length})</h4><div className="mt-3 space-y-2">{orders.length ? orders.map(o=><div key={o.id} className="rounded-xl bg-cream-50 p-3 text-sm"><div className="flex justify-between"><span>#{o.id.slice(0,8)}</span><b>{formatPrice(o.total)}</b></div><p className="mt-1 capitalize text-xs text-ink-700/60">{o.status}</p></div>) : <p className="text-sm text-ink-700/60">No linked orders yet.</p>}</div></> : <p className="text-sm text-ink-700/60">Select a customer to view their profile and order history.</p>}</aside></div></section>; }
 
-export function CouponManagement() { const [coupons, setCoupons] = useState<Resource[]>([]); const [editing, setEditing] = useState<Resource | null>(null); const [creating, setCreating] = useState(false); const load = async () => { if (!supabase) return; const {data}=await supabase.from('admin_resources').select('*').eq('kind','coupon').order('created_at',{ascending:false}); setCoupons((data||[]) as Resource[]); }; useEffect(()=>{void load();},[]); const remove=async(id:string)=>{if(supabase&&confirm('Delete this coupon?')){await supabase.from('admin_resources').delete().eq('id',id);void load();}}; return <section><div className="flex flex-wrap items-end justify-between gap-4"><div><h2 className="font-display text-2xl font-semibold text-wine-700">Coupons & offers</h2><p className="mt-1 text-sm text-ink-700/60">Create discount codes with percentage/fixed values, expiration dates and usage limits.</p></div><button onClick={()=>setCreating(true)} className="inline-flex items-center gap-2 rounded-full bg-wine-600 px-4 py-2.5 text-sm font-semibold text-white"><Plus className="h-4 w-4"/>Create coupon</button></div><div className="mt-6 space-y-3">{coupons.map(c=><div key={c.id} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-cream-100/50 p-4 ring-1 ring-cream-200"><div><p className="font-semibold text-wine-700">{c.title}</p><p className="mt-1 text-sm text-ink-700/60">{c.data?.discount_type === 'percentage' ? `${c.data.discount_value}% off` : `${formatPrice(Number(c.data?.discount_value || 0))} off`} · Expires {c.data?.expires_at || 'Never'} · Limit {c.data?.usage_limit || 'Unlimited'}</p></div><div className="flex gap-2"><button onClick={()=>setEditing(c)} className="rounded-full border border-cream-300 px-3 py-1.5 text-xs font-semibold">Edit</button><button onClick={()=>void remove(c.id)} className="rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600">Delete</button></div></div>)}{!coupons.length&&<p className="rounded-2xl bg-cream-100/50 p-8 text-center text-sm text-ink-700/60">No coupons yet.</p>}</div>{(creating||editing)&&<CouponModal coupon={editing} onClose={()=>{setCreating(false);setEditing(null)}} onSaved={()=>{setCreating(false);setEditing(null);void load()}}/>}</section>; }
+export function CouponManagement() {
+  const [coupons, setCoupons] = useState<Resource[]>([]);
+  const [editing, setEditing] = useState<Resource | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [couponToDelete, setCouponToDelete] = useState<Resource | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const load = async () => {
+    if (!supabase) return;
+    const { data } = await supabase.from('admin_resources').select('*').eq('kind', 'coupon').order('created_at', { ascending: false });
+    setCoupons((data || []) as Resource[]);
+  };
+
+  useEffect(() => { void load(); }, []);
+
+  const confirmDeleteCoupon = async () => {
+    if (!couponToDelete || !supabase) return;
+    setDeleting(true);
+    await supabase.from('admin_resources').delete().eq('id', couponToDelete.id);
+    setDeleting(false);
+    setCouponToDelete(null);
+    void load();
+  };
+
+  return (
+    <section>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className="font-display text-2xl font-semibold text-wine-700">Coupons & offers</h2>
+          <p className="mt-1 text-sm text-ink-700/60">Create discount codes with percentage/fixed values, expiration dates and usage limits.</p>
+        </div>
+        <button onClick={() => setCreating(true)} className="inline-flex items-center gap-2 rounded-full bg-wine-600 px-4 py-2.5 text-sm font-semibold text-white">
+          <Plus className="h-4 w-4" />Create coupon
+        </button>
+      </div>
+      <div className="mt-6 space-y-3">
+        {coupons.map(c => (
+          <div key={c.id} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-cream-100/50 p-4 ring-1 ring-cream-200">
+            <div>
+              <p className="font-semibold text-wine-700">{c.title}</p>
+              <p className="mt-1 text-sm text-ink-700/60">
+                {c.data?.discount_type === 'percentage' ? `${c.data.discount_value}% off` : `${formatPrice(Number(c.data?.discount_value || 0))} off`} · Expires {c.data?.expires_at || 'Never'} · Limit {c.data?.usage_limit || 'Unlimited'}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setEditing(c)} className="rounded-full border border-cream-300 px-3 py-1.5 text-xs font-semibold">Edit</button>
+              <button onClick={() => setCouponToDelete(c)} className="rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600">Delete</button>
+            </div>
+          </div>
+        ))}
+        {!coupons.length && <p className="rounded-2xl bg-cream-100/50 p-8 text-center text-sm text-ink-700/60">No coupons yet.</p>}
+      </div>
+
+      {(creating || editing) && (
+        <CouponModal
+          coupon={editing}
+          onClose={() => { setCreating(false); setEditing(null); }}
+          onSaved={() => { setCreating(false); setEditing(null); void load(); }}
+        />
+      )}
+
+      {/* Confirmation Dialog for Deleting Coupon */}
+      <ConfirmationDialog
+        isOpen={!!couponToDelete}
+        title="Delete Coupon Code?"
+        message={`Are you sure you want to delete coupon code "${couponToDelete?.title}"?`}
+        confirmText="Delete Coupon"
+        cancelText="Cancel"
+        variant="danger"
+        itemName={couponToDelete?.title}
+        isLoading={deleting}
+        onConfirm={confirmDeleteCoupon}
+        onCancel={() => setCouponToDelete(null)}
+      />
+    </section>
+  );
+}
+
 function CouponModal({coupon,onClose,onSaved}:{coupon:Resource|null;onClose:()=>void;onSaved:()=>void}) { const [code,setCode]=useState(coupon?.title||'');const [type,setType]=useState(coupon?.data?.discount_type||'percentage');const [value,setValue]=useState(coupon?.data?.discount_value||'');const [expires,setExpires]=useState(coupon?.data?.expires_at||'');const [limit,setLimit]=useState(coupon?.data?.usage_limit||'');const save=async()=>{if(!supabase||!code||!value)return;const payload={kind:'coupon',title:code.toUpperCase(),active:true,data:{discount_type:type,discount_value:value,expires_at:expires,usage_limit:limit}};const {error}=coupon?await supabase.from('admin_resources').update(payload).eq('id',coupon.id):await supabase.from('admin_resources').insert(payload);if(!error)onSaved();};return <div className="fixed inset-0 z-[90] grid place-items-center bg-ink-900/50 p-4" onClick={onClose}><div className="w-full max-w-lg rounded-3xl bg-cream-50 p-6" onClick={e=>e.stopPropagation()}><h3 className="font-display text-xl font-semibold text-wine-700">{coupon?'Edit':'Create'} coupon</h3><div className="mt-5 space-y-3"><input className="input" placeholder="Code, e.g. FESTIVE20" value={code} onChange={e=>setCode(e.target.value)}/><div className="grid grid-cols-2 gap-3"><select className="input" value={type} onChange={e=>setType(e.target.value)}><option value="percentage">Percentage discount</option><option value="fixed">Fixed discount</option></select><input className="input" type="number" min="1" placeholder="Discount value" value={value} onChange={e=>setValue(e.target.value)}/></div><input className="input" type="date" value={expires} onChange={e=>setExpires(e.target.value)}/><input className="input" type="number" min="1" placeholder="Usage limit (optional)" value={limit} onChange={e=>setLimit(e.target.value)}/><div className="flex gap-3"><button onClick={()=>void save()} className="rounded-full bg-wine-600 px-5 py-2.5 text-sm font-semibold text-white">Save coupon</button><button onClick={onClose} className="rounded-full border border-cream-300 px-5 py-2.5 text-sm">Cancel</button></div></div></div></div>; }
 
-export function ReviewManagement() { const [reviews, setReviews] = useState<Resource[]>([]); const [loading, setLoading] = useState(true); const load = async () => { if (!supabase) return; setLoading(true); const { data } = await supabase.from('admin_resources').select('*').eq('kind','review').order('created_at',{ascending:false}); setReviews((data || []) as Resource[]); setLoading(false); }; useEffect(()=>{void load();},[]); const setStatus = async (review: Resource, approved: boolean) => { if (supabase) { await supabase.from('admin_resources').update({ active: approved, data: { ...(review.data || {}), moderation: approved ? 'approved' : 'rejected' } }).eq('id',review.id); void load(); } }; const remove = async (id:string) => { if (supabase && confirm('Delete this review permanently?')) { await supabase.from('admin_resources').delete().eq('id',id); void load(); } }; return <section><h2 className="font-display text-2xl font-semibold text-wine-700">Reviews</h2><p className="mt-1 text-sm text-ink-700/60">View customer feedback and approve, reject or remove inappropriate reviews.</p>{loading ? <LoadingSkeleton type="table" count={3} /> : <div className="mt-6 space-y-3">{reviews.length ? reviews.map(review => <article key={review.id} className="rounded-2xl bg-cream-100/50 p-5 ring-1 ring-cream-200"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold text-wine-700">{review.title}</h3><p className="mt-1 text-sm text-ink-700/65">{review.subtitle || 'No review text'}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${review.active ? 'bg-sage-500/15 text-sage-500' : 'bg-red-50 text-red-600'}`}>{review.data?.moderation || (review.active ? 'approved' : 'rejected')}</span></div><div className="mt-4 flex flex-wrap gap-2"><button onClick={()=>void setStatus(review,true)} className="inline-flex items-center gap-1 rounded-full bg-sage-500 px-3 py-1.5 text-xs font-semibold text-white"><Check className="h-3.5 w-3.5"/>Approve</button><button onClick={()=>void setStatus(review,false)} className="rounded-full border border-gold-500/40 px-3 py-1.5 text-xs font-semibold text-gold-600">Reject</button><button onClick={()=>void remove(review.id)} className="inline-flex items-center gap-1 rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600"><Trash2 className="h-3.5 w-3.5"/>Delete</button></div></article>) : <p className="rounded-2xl bg-cream-100/50 p-8 text-center text-sm text-ink-700/60">No reviews awaiting moderation.</p>}</div>}</section>; }
+export function ReviewManagement() {
+  const [reviews, setReviews] = useState<Resource[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [reviewToDelete, setReviewToDelete] = useState<Resource | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const load = async () => {
+    if (!supabase) return;
+    setLoading(true);
+    const { data } = await supabase.from('admin_resources').select('*').eq('kind', 'review').order('created_at', { ascending: false });
+    setReviews((data || []) as Resource[]);
+    setLoading(false);
+  };
+
+  useEffect(() => { void load(); }, []);
+
+  const setStatus = async (review: Resource, approved: boolean) => {
+    if (supabase) {
+      await supabase.from('admin_resources').update({ active: approved, data: { ...(review.data || {}), moderation: approved ? 'approved' : 'rejected' } }).eq('id', review.id);
+      void load();
+    }
+  };
+
+  const confirmDeleteReview = async () => {
+    if (!reviewToDelete || !supabase) return;
+    setDeleting(true);
+    await supabase.from('admin_resources').delete().eq('id', reviewToDelete.id);
+    setDeleting(false);
+    setReviewToDelete(null);
+    void load();
+  };
+
+  return (
+    <section>
+      <h2 className="font-display text-2xl font-semibold text-wine-700">Reviews</h2>
+      <p className="mt-1 text-sm text-ink-700/60">View customer feedback and approve, reject or remove inappropriate reviews.</p>
+      {loading ? (
+        <LoadingSkeleton type="table" count={3} />
+      ) : (
+        <div className="mt-6 space-y-3">
+          {reviews.length ? (
+            reviews.map(review => (
+              <article key={review.id} className="rounded-2xl bg-cream-100/50 p-5 ring-1 ring-cream-200">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold text-wine-700">{review.title}</h3>
+                    <p className="mt-1 text-sm text-ink-700/65">{review.subtitle || 'No review text'}</p>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${review.active ? 'bg-sage-500/15 text-sage-500' : 'bg-red-50 text-red-600'}`}>
+                    {review.data?.moderation || (review.active ? 'approved' : 'rejected')}
+                  </span>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button onClick={() => void setStatus(review, true)} className="inline-flex items-center gap-1 rounded-full bg-sage-500 px-3 py-1.5 text-xs font-semibold text-white">
+                    <Check className="h-3.5 w-3.5" />Approve
+                  </button>
+                  <button onClick={() => void setStatus(review, false)} className="rounded-full border border-gold-500/40 px-3 py-1.5 text-xs font-semibold text-gold-600">
+                    Reject
+                  </button>
+                  <button onClick={() => setReviewToDelete(review)} className="inline-flex items-center gap-1 rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600">
+                    <Trash2 className="h-3.5 w-3.5" />Delete
+                  </button>
+                </div>
+              </article>
+            ))
+          ) : (
+            <p className="rounded-2xl bg-cream-100/50 p-8 text-center text-sm text-ink-700/60">No reviews awaiting moderation.</p>
+          )}
+        </div>
+      )}
+
+      {/* Confirmation Dialog for Deleting Review */}
+      <ConfirmationDialog
+        isOpen={!!reviewToDelete}
+        title="Delete Customer Review?"
+        message={`Are you sure you want to permanently delete this review for "${reviewToDelete?.title}"?`}
+        confirmText="Delete Review"
+        cancelText="Cancel"
+        variant="danger"
+        itemName={reviewToDelete?.title}
+        isLoading={deleting}
+        onConfirm={confirmDeleteReview}
+        onCancel={() => setReviewToDelete(null)}
+      />
+    </section>
+  );
+}
 
 
 export function Inventory({ products, onChanged }: { products: Product[]; onChanged: () => void }) { const low = products.filter(p => p.stock > 0 && p.stock <= 5); const [updating, setUpdating] = useState<string | null>(null); const updateStock = async (id:string, stock:number) => { if (!supabase) return; setUpdating(id); await supabase.from('products').update({ stock: Math.max(0, stock) }).eq('id',id); setUpdating(null); onChanged(); }; return <section><h2 className="font-display text-2xl font-semibold text-wine-700">Inventory</h2><p className="mt-1 text-sm text-ink-700/60">View and update stock, with low-stock and out-of-stock alerts.</p><div className="mt-6 grid gap-4 sm:grid-cols-3"><Stat label="Products" value={products.length} /><Stat label="Low stock alerts" value={low.length} /><Stat label="Out of stock" value={products.filter(p => p.stock === 0).length} /></div><div className="mt-6 space-y-2">{products.map(p => <div key={p.id} className="flex flex-col gap-3 rounded-2xl bg-cream-100/50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><span className="font-medium text-wine-700">{p.name}</span><p className={`mt-1 text-xs font-semibold ${p.stock === 0 ? 'text-red-600' : p.stock <= 5 ? 'text-gold-600' : 'text-sage-500'}`}>{p.stock === 0 ? 'Out of stock' : p.stock <= 5 ? 'Low stock alert' : 'In stock'}</p></div><div className="flex items-center gap-2"><input type="number" min="0" defaultValue={p.stock} onBlur={e => { const value = Number(e.target.value); if (value !== p.stock) void updateStock(p.id, value); }} className="w-24 rounded-xl border border-cream-300 bg-cream-50 px-3 py-2 text-sm outline-none" aria-label={`Stock for ${p.name}`} /><span className="text-xs text-ink-700/60">{updating === p.id ? 'Saving…' : 'units'}</span></div></div>)}</div></section>; }

@@ -12,6 +12,7 @@ import CartDrawer from '@/components/CartDrawer';
 import WhatsAppButton from '@/components/WhatsAppButton';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import HomePage from '@/pages/HomePage';
+import { LoadingSkeleton } from '@/components/LoadingSkeleton';
 const AdminDashboard = lazy(() => import('@/components/AdminDashboard'));
 const ProfilePage = lazy(() => import('@/pages/ProfilePage'));
 const AllHampersPage = lazy(() => import('@/pages/AllHampersPage'));
@@ -74,7 +75,13 @@ function App() {
             <Router>
             <div className="min-h-screen bg-cream-50 dark:bg-gray-900 transition-colors pb-16 md:pb-0">
               <Navbar />
-              <Suspense fallback={<main className="min-h-screen pt-24" aria-busy="true" />}>
+              <Suspense
+                fallback={
+                  <main className="min-h-screen pt-28 px-4 sm:px-6 max-w-7xl mx-auto" aria-busy="true">
+                    <LoadingSkeleton type="hamper-grid" count={4} />
+                  </main>
+                }
+              >
                 <Routes>
                   <Route path="/" element={<HomePage />} />
                   <Route path="/all-hampers" element={<AllHampersPage />} />
