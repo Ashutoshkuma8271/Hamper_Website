@@ -14,6 +14,7 @@ import HamperBuilder from './HamperBuilder';
 import HamperPreviewModal from './HamperPreviewModal';
 import HamperDetailModal from './HamperDetailModal';
 import ProfileSection from './ProfileSection';
+import ConfirmationDialog from './ConfirmationDialog';
 import {
   Store,
   Package,
@@ -95,6 +96,10 @@ export default function VendorDashboard({
   const [customerModalHamper, setCustomerModalHamper] = useState<VendorHamper | null>(null);
   const [editingProduct, setEditingProduct] = useState<VendorProduct | null>(null);
 
+  // Destructive Action Confirmation Dialog States
+  const [hamperToDelete, setHamperToDelete] = useState<VendorHamper | null>(null);
+  const [productToDelete, setProductToDelete] = useState<VendorProduct | null>(null);
+
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -133,25 +138,31 @@ export default function VendorDashboard({
     return () => unSub();
   }, [fetchVendorOrders]);
 
-  // Product Delete
-  const handleDeleteProduct = (id: string) => {
-    if (!confirm('Are you sure you want to delete this product?')) return;
+  // Product Delete Confirmation Handler
+  const confirmDeleteProduct = () => {
+    if (!productToDelete) return;
     try {
-      VendorStore.deleteVendorProduct(id, vendorId);
+      VendorStore.deleteVendorProduct(productToDelete.id, vendorId);
+      toast.success(`Product "${productToDelete.name}" deleted successfully.`);
       refreshData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Delete failed');
+      toast.error(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setProductToDelete(null);
     }
   };
 
-  // Hamper Delete
-  const handleDeleteHamper = (id: string) => {
-    if (!confirm('Are you sure you want to delete this hamper?')) return;
+  // Hamper Delete Confirmation Handler
+  const confirmDeleteHamper = () => {
+    if (!hamperToDelete) return;
     try {
-      VendorStore.deleteVendorHamper(id, vendorId);
+      VendorStore.deleteVendorHamper(hamperToDelete.id, vendorId);
+      toast.success(`Hamper "${hamperToDelete.name}" deleted successfully.`);
       refreshData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Delete failed');
+      toast.error(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setHamperToDelete(null);
     }
   };
 
@@ -507,8 +518,8 @@ export default function VendorDashboard({
                         </button>
 
                         <button
-                          onClick={() => handleDeleteProduct(p.id)}
-                          className="text-red-500 hover:text-red-700 p-1"
+                          onClick={() => setProductToDelete(p)}
+                          className="text-red-500 hover:text-red-700 p-1 transition-colors"
                           title="Delete Product"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -745,8 +756,8 @@ export default function VendorDashboard({
                           </button>
 
                           <button
-                            onClick={() => handleDeleteHamper(h.id)}
-                            className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                            onClick={() => setHamperToDelete(h)}
+                            className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
                             title="Delete Hamper"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -1037,6 +1048,34 @@ export default function VendorDashboard({
           onClose={() => setCustomerModalHamper(null)}
         />
       )}
+
+      {/* Confirmation Dialog for Deleting Hamper */}
+      <ConfirmationDialog
+        isOpen={!!hamperToDelete}
+        title="Delete Gift Hamper?"
+        message={`Are you sure you want to permanently delete "${hamperToDelete?.name}"? This will remove the hamper from your catalog and the live storefront.`}
+        confirmText="Delete Hamper"
+        cancelText="Keep Hamper"
+        variant="danger"
+        itemName={hamperToDelete?.name}
+        itemImage={hamperToDelete?.thumbnail}
+        onConfirm={confirmDeleteHamper}
+        onCancel={() => setHamperToDelete(null)}
+      />
+
+      {/* Confirmation Dialog for Deleting Product */}
+      <ConfirmationDialog
+        isOpen={!!productToDelete}
+        title="Delete Vendor Product?"
+        message={`Are you sure you want to delete "${productToDelete?.name}"? Any active hampers using this product may be affected.`}
+        confirmText="Delete Product"
+        cancelText="Cancel"
+        variant="danger"
+        itemName={productToDelete?.name}
+        itemImage={productToDelete?.image}
+        onConfirm={confirmDeleteProduct}
+        onCancel={() => setProductToDelete(null)}
+      />
     </div>
   );
 }

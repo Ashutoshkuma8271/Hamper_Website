@@ -38,6 +38,9 @@ import {
   type WalletTransaction,
   type ReturnRequest,
 } from '@/lib/orderSync';
+import ConfirmationDialog from '@/components/ConfirmationDialog';
+import OrderTrackingTimeline from '@/components/OrderTrackingTimeline';
+import AddressManager from '@/components/AddressManager';
 import { toast } from 'react-hot-toast';
 import { DashboardSkeleton } from '@/components/skeletons';
 
@@ -211,14 +214,9 @@ export default function CustomerDashboard() {
             {loadingData ? (
               <DashboardSkeleton />
             ) : section === 'addresses' ? (
-              <Addresses
-                addresses={addresses}
-                adding={addingAddress}
-                setAdding={setAddingAddress}
-                address={address}
-                setAddress={setAddress}
-                save={saveAddress}
-              />
+              <div className="rounded-3xl bg-cream-50 p-6 sm:p-8 ring-1 ring-cream-200 dark:bg-gray-800 dark:ring-gray-700 font-sans shadow-sm">
+                <AddressManager userId={session?.user?.id} />
+              </div>
             ) : section === 'orders' ? (
 
               <OrdersTimeline
@@ -461,22 +459,26 @@ function OrdersTimeline({
   compact?: boolean;
 }) {
   const [selectedReturnOrder, setSelectedReturnOrder] = useState<any | null>(null);
+  const [orderToCancel, setOrderToCancel] = useState<OrderRow | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
-  const getTimelineSteps = (status: string) => {
-    const s = (status || 'new').toLowerCase();
-    let stepIndex = 0;
-    if (s.includes('place') || s.includes('confirm')) stepIndex = 1;
-    else if (s.includes('pack') || s.includes('prepar')) stepIndex = 2;
-    else if (s.includes('ship')) stepIndex = 3;
-    else if (s.includes('deliver')) stepIndex = 4;
-
-    return { stepIndex, isCancelled: s.includes('cancel'), isReturned: s.includes('return') || s.includes('refund') };
-  };
-
-  const handleCancel = async (orderId: string) => {
-    if (!confirm('Are you sure you want to cancel this order? Instant refund will be credited to your wallet.')) return;
-    const ok = await cancelCustomerOrder(orderId, userId, 'Customer requested cancellation from dashboard');
-    if (ok) onRefresh();
+  const confirmCancelOrder = async () => {
+    if (!orderToCancel) return;
+    setIsCancelling(true);
+    try {
+      const ok = await cancelCustomerOrder(orderToCancel.id, userId, 'Customer requested cancellation from dashboard');
+      if (ok) {
+        toast.success(`Order #${orderToCancel.id.slice(0, 8).toUpperCase()} cancelled. Refund credited to wallet.`);
+        onRefresh();
+      } else {
+        toast.error('Could not cancel order. Please contact customer support.');
+      }
+    } catch (err) {
+      toast.error('Cancellation failed');
+    } finally {
+      setIsCancelling(false);
+      setOrderToCancel(null);
+    }
   };
 
   return (
@@ -488,7 +490,7 @@ function OrdersTimeline({
           </h2>
           {!compact && (
             <p className="text-xs text-ink-700/60 dark:text-gray-400 mt-0.5">
-              Live visual status timeline, cancellations &amp; return requests.
+              Live visual status timeline, real-time database state, cancellations &amp; returns.
             </p>
           )}
         </div>
@@ -506,9 +508,8 @@ function OrdersTimeline({
       ) : (
         <div className="space-y-6">
           {orders.map((o) => {
-            const { stepIndex, isCancelled, isReturned } = getTimelineSteps(o.status);
-            const isDelivered = o.status === 'delivered';
-            const canCancel = ['new', 'placed'].includes(o.status.toLowerCase());
+            const isDelivered = (o.status || '').toLowerCase() === 'delivered';
+            const canCancel = ['new', 'placed', 'pending'].includes((o.status || '').toLowerCase());
             const hasReturnReq = returns.some((r) => r.order_id === o.id);
 
             return (
@@ -534,7 +535,7 @@ function OrdersTimeline({
                     </span>
                     <span
                       className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${
-                        isCancelled
+                        (o.status || '').toLowerCase().includes('cancel')
                           ? 'bg-red-500/15 text-red-600 dark:bg-red-950/40 dark:text-red-400'
                           : isDelivered
                           ? 'bg-sage-500/15 text-sage-600 dark:bg-sage-950/40 dark:text-sage-400'
@@ -555,52 +556,30 @@ function OrdersTimeline({
                           <img src={item.image} alt={item.name} className="h-8 w-8 rounded-lg object-cover" />
                         )}
                         <span className="font-medium text-wine-900 dark:text-cream-100">{item.name}</span>
-                        <span className="text-ink-700/50">x{item.qty || 1}</span>
+                        <span className="text-ink-700/50">x{item.qty || item.quantity || 1}</span>
                       </div>
                       <span className="font-semibold text-wine-700 dark:text-gold-300">
-                        {formatPrice((item.price || 0) * (item.qty || 1))}
+                        {formatPrice((item.price || 0) * (item.qty || item.quantity || 1))}
                       </span>
                     </div>
                   ))}
                 </div>
 
-                {/* Visual Status Timeline */}
-                {!isCancelled && !isReturned && (
-                  <div className="pt-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-700/50 dark:text-gray-400 mb-2">
-                      Live Delivery Progress
-                    </p>
-                    <div className="grid grid-cols-4 gap-1 text-center">
-                      {[
-                        { label: 'Order Placed', step: 1 },
-                        { label: 'Confirmed', step: 2 },
-                        { label: 'Shipped', step: 3 },
-                        { label: 'Delivered', step: 4 },
-                      ].map((st) => {
-                        const active = stepIndex >= st.step;
-                        return (
-                          <div key={st.step} className="flex flex-col items-center">
-                            <div
-                              className={`h-2.5 w-full rounded-full transition-colors ${
-                                active ? 'bg-gold-500' : 'bg-cream-200 dark:bg-gray-800'
-                              }`}
-                            />
-                            <span className={`text-[10px] mt-1 font-semibold ${active ? 'text-wine-800 dark:text-gold-300' : 'text-ink-700/40 dark:text-gray-500'}`}>
-                              {st.label}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                {/* Real-time Order Tracking Pipeline Stepper */}
+                <div className="pt-2 border-t border-cream-100 dark:border-gray-800">
+                  <OrderTrackingTimeline
+                    status={o.status}
+                    orderNumber={o.id.slice(0, 8).toUpperCase()}
+                    compact={compact}
+                  />
+                </div>
 
                 {/* Actions */}
                 {!compact && (
                   <div className="flex items-center justify-end gap-3 pt-2 border-t border-cream-200 dark:border-gray-800">
                     {canCancel && (
                       <button
-                        onClick={() => handleCancel(o.id)}
+                        onClick={() => setOrderToCancel(o)}
                         className="rounded-full border border-red-300 px-4 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/40 transition-colors"
                       >
                         Cancel Order
@@ -638,6 +617,19 @@ function OrdersTimeline({
           userId={userId}
         />
       )}
+
+      {/* Confirmation Dialog for Order Cancellation */}
+      <ConfirmationDialog
+        isOpen={!!orderToCancel}
+        title="Cancel This Order?"
+        message={`Are you sure you want to cancel Order #${orderToCancel?.id.slice(0, 8).toUpperCase()}? The total amount of ${formatPrice(orderToCancel?.total || 0)} will be refunded instantly to your Customer Refund Wallet.`}
+        confirmText="Cancel Order"
+        cancelText="Keep Order"
+        variant="danger"
+        isLoading={isCancelling}
+        onConfirm={confirmCancelOrder}
+        onCancel={() => setOrderToCancel(null)}
+      />
     </div>
   );
 }
@@ -739,64 +731,6 @@ function ReturnModal({
           </div>
         </form>
       </div>
-    </div>
-  );
-}
-
-function Addresses({
-  addresses,
-  adding,
-  setAdding,
-  address,
-  setAddress,
-  save,
-}: {
-  addresses: Address[];
-  adding: boolean;
-  setAdding: (v: boolean) => void;
-  address: any;
-  setAddress: (v: any) => void;
-  save: (e: React.FormEvent) => void;
-}) {
-  return (
-    <div className="rounded-3xl bg-cream-50 p-6 ring-1 ring-cream-200 dark:bg-gray-800 dark:ring-gray-700 font-sans">
-      <div className="flex items-center justify-between">
-        <h2 className="font-display text-xl font-semibold text-wine-700 dark:text-white">
-          Saved addresses
-        </h2>
-        <button
-          onClick={() => setAdding(!adding)}
-          className="inline-flex items-center gap-2 rounded-full bg-wine-600 px-4 py-2 text-sm font-semibold text-white"
-        >
-          <Plus className="h-4 w-4" />
-          Add address
-        </button>
-      </div>
-      {adding && (
-        <form onSubmit={save} className="mt-5 grid gap-3 rounded-2xl bg-cream-100/60 p-4 sm:grid-cols-2">
-          <input required placeholder="Label (Home, Work)" value={address.label} onChange={(e) => setAddress({ ...address, label: e.target.value })} className="input" />
-          <input required placeholder="Street address" value={address.address_line} onChange={(e) => setAddress({ ...address, address_line: e.target.value })} className="input" />
-          <input placeholder="City" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} className="input" />
-          <input placeholder="State" value={address.state} onChange={(e) => setAddress({ ...address, state: e.target.value })} className="input" />
-          <input placeholder="Postal code" value={address.postal_code} onChange={(e) => setAddress({ ...address, postal_code: e.target.value })} className="input" />
-          <button className="rounded-xl bg-wine-600 px-4 py-2 text-sm font-semibold text-white">Save address</button>
-        </form>
-      )}
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        {addresses.map((a) => (
-          <div key={a.id} className="rounded-2xl bg-cream-100/60 p-5 dark:bg-gray-700/60">
-            <p className="font-semibold text-wine-700 dark:text-white">{a.label}</p>
-            <p className="mt-2 text-sm text-ink-700/65 dark:text-gray-300">
-              {a.address_line}
-              <br />
-              {[a.city, a.state, a.postal_code].filter(Boolean).join(', ')}
-            </p>
-          </div>
-        ))}
-      </div>
-      {!addresses.length && !adding && (
-        <p className="mt-5 text-sm text-ink-700/60 dark:text-gray-400">No addresses saved yet.</p>
-      )}
     </div>
   );
 }

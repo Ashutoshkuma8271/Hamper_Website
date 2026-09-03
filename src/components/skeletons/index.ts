@@ -1,4 +1,12 @@
 export { Shimmer } from './Shimmer';
 export { HamperCardSkeleton } from './HamperCardSkeleton';
 export { HamperGridSkeleton } from './HamperGridSkeleton';
-export { DashboardSkeleton, OrderCardSkeleton } from './DashboardSkeleton';
+export {
+  DashboardSkeleton,
+  AdminDashboardSkeleton,
+  OrderCardSkeleton,
+  TableSkeleton,
+  OrderConfirmationSkeleton,
+} from './DashboardSkeleton';
+export { LoadingSkeleton } from '../LoadingSkeleton';
+

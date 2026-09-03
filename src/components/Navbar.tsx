@@ -180,21 +180,11 @@ export default function Navbar() {
             />
           </form>
 
-          {/* Mobile Search Toggle */}
-          <button
-            type="button"
-            onClick={() => setSearchExpanded(!searchExpanded)}
-            className="md:hidden flex items-center justify-center h-9 w-9 rounded-full text-[#44040F] bg-transparent border border-[#E5C57B]/80 hover:bg-[#FBDE9C]/30 transition-colors dark:text-[#FBDE9C] dark:border-[#461C25]"
-            aria-label="Toggle search input"
-          >
-            <Search className="h-4 w-4" strokeWidth={2.2} />
-          </button>
-
           {/* Theme Toggle Button */}
           <button
             type="button"
             onClick={toggleTheme}
-            className="flex items-center justify-center h-9 w-9 rounded-full text-[#44040F] bg-transparent border border-[#E5C57B]/80 hover:bg-[#FBDE9C]/30 transition-colors dark:text-[#FBDE9C] dark:border-[#461C25]"
+            className="flex items-center justify-center h-8.5 w-8.5 sm:h-9 sm:w-9 rounded-full text-[#44040F] bg-transparent border border-[#E5C57B]/80 hover:bg-[#FBDE9C]/30 transition-colors dark:text-[#FBDE9C] dark:border-[#461C25] shrink-0"
             aria-label="Toggle dark/light theme"
             title={theme === 'light' ? 'Switch to Dark mode' : 'Switch to Light mode'}
           >
@@ -205,11 +195,12 @@ export default function Navbar() {
             )}
           </button>
 
-          {/* Wishlist Link (Desktop) */}
+          {/* Wishlist Link (Visible on Mobile & Desktop) */}
           <Link
             to="/wishlist"
-            className="relative hidden sm:flex items-center justify-center h-9 w-9 rounded-full text-[#44040F] bg-transparent border border-[#E5C57B]/80 hover:bg-[#FBDE9C]/30 transition-colors dark:text-[#FBDE9C] dark:border-[#461C25]"
+            className="relative flex items-center justify-center h-8.5 w-8.5 sm:h-9 sm:w-9 rounded-full text-[#44040F] bg-transparent border border-[#E5C57B]/80 hover:bg-[#FBDE9C]/30 transition-colors dark:text-[#FBDE9C] dark:border-[#461C25] shrink-0"
             aria-label="Wishlist"
+            title="Wishlist"
           >
             <Heart
               className={showWishlistBadge ? 'h-4 w-4 text-[#7F011F] fill-[#7F011F] dark:text-[#FBDE9C] dark:fill-[#FBDE9C]' : 'h-4 w-4'}
@@ -222,11 +213,11 @@ export default function Navbar() {
             )}
           </Link>
 
-          {/* User Account / Profile */}
+          {/* User Account / Profile (Visible on Mobile & Desktop) */}
           {session ? (
             <Link
               to={accountLink}
-              className="flex items-center justify-center h-9 w-9 rounded-full bg-[#57222C] text-[#FBDE9C] text-xs font-black ring-2 ring-[#FBDE9C] hover:ring-[#C99738] transition-all shadow-md shrink-0"
+              className="flex items-center justify-center h-8.5 w-8.5 sm:h-9 sm:w-9 rounded-full bg-[#57222C] text-[#FBDE9C] text-xs font-black ring-1.5 ring-[#FBDE9C] hover:ring-[#C99738] transition-all shadow-sm shrink-0 overflow-hidden"
               aria-label="Account profile"
               title={
                 profile?.role === 'vendor'
@@ -243,8 +234,9 @@ export default function Navbar() {
           ) : (
             <Link
               to="/profile"
-              className="hidden sm:flex items-center justify-center h-9 w-9 rounded-full text-[#44040F] bg-transparent border border-[#E5C57B]/80 hover:bg-[#FBDE9C]/30 transition-colors dark:text-[#FBDE9C] dark:border-[#461C25]"
+              className="flex items-center justify-center h-8.5 w-8.5 sm:h-9 sm:w-9 rounded-full text-[#44040F] bg-transparent border border-[#E5C57B]/80 hover:bg-[#FBDE9C]/30 transition-colors dark:text-[#FBDE9C] dark:border-[#461C25] shrink-0"
               aria-label="Sign in to your account"
+              title="Sign In / Profile"
             >
               <UserRound className="h-4 w-4" strokeWidth={2.2} />
             </Link>
@@ -254,12 +246,12 @@ export default function Navbar() {
           <button
             type="button"
             onClick={open}
-            className="relative flex items-center justify-center h-9 w-9 rounded-full bg-[#57222C] dark:bg-[#7F011F] text-[#FBDE9C] hover:bg-[#44040F] active:scale-95 transition-all shadow-[0_3px_12px_rgba(68,4,15,0.25)] border border-[#E5C57B]/60 shrink-0"
+            className="relative flex items-center justify-center h-8.5 w-8.5 sm:h-9 sm:w-9 rounded-full bg-[#57222C] dark:bg-[#7F011F] text-[#FBDE9C] hover:bg-[#44040F] active:scale-95 transition-all shadow-[0_3px_12px_rgba(68,4,15,0.25)] border border-[#E5C57B]/60 shrink-0"
             aria-label="Open cart drawer"
           >
             <ShoppingBag className="h-4 w-4 text-[#FBDE9C]" strokeWidth={2.2} />
             {showCartBadge && (
-              <span className="absolute -top-1 -right-1 flex items-center justify-center h-4.5 w-4.5 rounded-full bg-[#FBDE9C] text-[9.5px] font-black text-[#57222C] border border-[#57222C] shadow-md">
+              <span className="absolute -top-1 -right-1 flex items-center justify-center h-4 w-4 rounded-full bg-[#FBDE9C] text-[9.5px] font-black text-[#57222C] border border-[#57222C] shadow-md">
                 {count}
               </span>
             )}
@@ -269,12 +261,12 @@ export default function Navbar() {
           <button
             type="button"
             onClick={toggleMenu}
-            className="lg:hidden relative flex items-center justify-center h-9 w-9 rounded-full bg-transparent border border-[#E5C57B]/80 text-[#57222C] hover:bg-[#FBDE9C]/30 transition-all duration-300 dark:text-[#FBDE9C] dark:border-[#461C25] shrink-0 focus:outline-none focus:ring-2 focus:ring-[#57222C]/30"
+            className="lg:hidden relative flex items-center justify-center h-8.5 w-8.5 sm:h-9 sm:w-9 rounded-full bg-transparent border border-[#E5C57B]/80 text-[#57222C] hover:bg-[#FBDE9C]/30 transition-all duration-300 dark:text-[#FBDE9C] dark:border-[#461C25] shrink-0 focus:outline-none focus:ring-2 focus:ring-[#57222C]/30"
             aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
             aria-expanded={menuOpen}
             aria-controls="luxury-mobile-drawer"
           >
-            <div className="relative w-4.5 h-3.5 flex flex-col justify-between">
+            <div className="relative w-4 h-3 flex flex-col justify-between">
               {/* Top Bar */}
               <span
                 className={`h-0.5 w-full bg-[#57222C] dark:bg-[#FBDE9C] rounded-full transition-all duration-300 ease-out origin-top-left ${

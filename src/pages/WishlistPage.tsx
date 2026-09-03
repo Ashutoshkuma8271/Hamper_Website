@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { formatPrice, useCart, type CartProduct } from '@/cart';
 import { useWishlist } from '@/hooks/useWishlist';
+import { LoadingSkeleton } from '@/components/LoadingSkeleton';
 
 type SortOption = 'recent' | 'price-low' | 'price-high' | 'rating';
 
@@ -314,25 +315,18 @@ function EmptyWishlistView() {
   );
 }
 
-{/* Skeleton Loader View (Requirement 22) */}
+{/* Skeleton Loader View */}
 function WishlistSkeletonView() {
   return (
     <main className="min-h-screen bg-cream-50/60 dark:bg-gray-900 pt-24 pb-20 px-4 sm:px-6 lg:px-8 font-sans">
-      <div className="mx-auto max-w-7xl animate-pulse space-y-8">
-        <div className="h-8 w-48 rounded-xl bg-cream-200 dark:bg-gray-800"></div>
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="h-80 rounded-3xl bg-cream-200/70 dark:bg-gray-800/70 p-4 space-y-4"
-            >
-              <div className="h-44 rounded-2xl bg-cream-300/60 dark:bg-gray-700"></div>
-              <div className="h-4 w-3/4 rounded bg-cream-300/60 dark:bg-gray-700"></div>
-              <div className="h-4 w-1/2 rounded bg-cream-300/60 dark:bg-gray-700"></div>
-            </div>
-          ))}
+      <div className="mx-auto max-w-7xl space-y-8">
+        <div className="flex items-center gap-3 border-b border-cream-200 dark:border-gray-800 pb-6">
+          <div className="h-8 w-44 rounded-xl bg-wine-800/15 dark:bg-cream-100/15" />
+          <div className="h-6 w-16 rounded-full bg-gold-500/20" />
         </div>
+        <LoadingSkeleton type="hamper-grid" count={4} columns="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" />
       </div>
     </main>
   );
 }
+

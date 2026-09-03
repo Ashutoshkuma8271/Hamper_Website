@@ -25,11 +25,32 @@ export default function AdminAuth() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [adminExists, setAdminExists] = useState<boolean | null>(null);
 
   useEffect(() => {
     validateSessionRole().then((roleErr) => {
       if (roleErr) setError(roleErr);
     });
+
+    // Check if an admin is already registered in the system
+    async function checkAdminCount() {
+      if (!supabase) return;
+      try {
+        const { count, error } = await supabase
+          .from('admins')
+          .select('*', { count: 'exact', head: true });
+
+        if (!error && typeof count === 'number') {
+          setAdminExists(count > 0);
+          if (count > 0) {
+            setMode('login');
+          }
+        }
+      } catch (e) {
+        console.warn('Admin count check error:', e);
+      }
+    }
+    checkAdminCount();
   }, []);
 
   async function requestPasswordReset(e: FormEvent) {
@@ -110,6 +131,11 @@ export default function AdminAuth() {
       }
 
       if (mode === 'signup') {
+        // Enforce Single Admin policy
+        if (adminExists) {
+          throw new Error('Admin registration is closed. Only one primary Administrator account is allowed on this platform. Please sign in instead.');
+        }
+
         // --- 1. ADMIN SIGNUP FLOW ---
         const cleanName = sanitizeInput(name);
         if (!cleanName) {
@@ -243,17 +269,25 @@ export default function AdminAuth() {
         <button
           type="button"
           onClick={() => {
+            if (adminExists) {
+              setError('Admin account is already configured. Only primary Administrator login is permitted.');
+              toast.error('Only one Administrator is allowed on this platform.');
+              return;
+            }
             setMode('signup');
             setError(null);
             setSuccessMsg(null);
           }}
+          disabled={adminExists === true}
           className={`rounded-full py-2.5 text-sm font-medium transition-all ${
-            mode === 'signup'
+            adminExists === true
+              ? 'opacity-40 cursor-not-allowed text-gray-400'
+              : mode === 'signup'
               ? 'bg-wine-700 text-cream-50 shadow-sm'
               : 'text-ink-700/70 hover:text-wine-700 dark:text-gray-300'
           }`}
         >
-          Admin Signup
+          {adminExists ? 'Signup Closed (1 Admin Limit)' : 'Admin Setup'}
         </button>
       </div>
 

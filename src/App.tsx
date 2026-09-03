@@ -76,6 +76,7 @@ function App() {
                   <Route path="/customer/*" element={<RouteGate><CustomerDashboard /></RouteGate>} />
                   <Route path="/cart" element={<CartPage />} />
                   <Route path="/checkout" element={<CheckoutPage />} />
+                  <Route path="/order-confirmation" element={<OrderConfirmationPage />} />
                   <Route path="/order-confirmation/:orderId" element={<OrderConfirmationPage />} />
                   <Route path="/wishlist" element={<WishlistPage />} />
                   <Route path="/forgot-password" element={<ForgotPasswordPage />} />

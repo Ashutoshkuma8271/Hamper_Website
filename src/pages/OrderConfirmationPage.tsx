@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
   Package,
@@ -12,9 +12,22 @@ import {
   Store,
   Sparkles,
   ChevronRight,
+  Printer,
+  ShieldCheck,
+  Gift,
+  HelpCircle,
+  Copy,
+  Check,
+  Download,
+  MessageSquare,
+  FileText,
 } from 'lucide-react';
 import { formatPrice } from '@/cart';
 import { supabase } from '@/lib/supabase';
+import { subscribeToRealtimeOrders } from '@/lib/orderSync';
+import OrderTrackingTimeline from '@/components/OrderTrackingTimeline';
+import { toast } from 'react-hot-toast';
+import { LoadingSkeleton } from '@/components/LoadingSkeleton';
 
 type SavedOrder = {
   order_number: string;
@@ -22,129 +35,177 @@ type SavedOrder = {
   customer_email: string;
   customer_phone: string;
   address: string;
+  delivery_slot?: string;
+  gift_card_note?: string;
   items: Array<{
     name: string;
     image: string;
     price: number;
-    quantity: number;
-    subtotal: number;
+    quantity?: number;
+    qty?: number;
+    subtotal?: number;
     vendor_name?: string;
     customization?: any;
   }>;
   total: number;
+  subtotal?: number;
+  discount?: number;
+  delivery_charge?: number;
+  customization_charge?: number;
+  wallet_discount?: number;
   payment_method: string;
   payment_status: string;
+  payment_id?: string;
   status: string;
   created_at: string;
   estimated_delivery?: string;
 };
 
 export default function OrderConfirmationPage() {
-  const { orderId } = useParams<{ orderId: string }>();
+  const { orderId: paramOrderId } = useParams<{ orderId: string }>();
+  const [searchParams] = useSearchParams();
+  const queryOrderId = searchParams.get('orderId');
+  const effectiveOrderId = paramOrderId || queryOrderId || '';
+
   const navigate = useNavigate();
   const [order, setOrder] = useState<SavedOrder | null>(null);
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadOrder() {
-      // 1. Check localStorage first
-      if (orderId) {
-        try {
-          const cached = localStorage.getItem(`as_hamper_order_${orderId}`);
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            if (mounted) {
-              setOrder(parsed);
-              setLoading(false);
-              return;
-            }
-          }
-        } catch (e) {
-          console.error('Error reading order from localStorage:', e);
-        }
-      }
-
-      // 2. Fetch from Supabase
-      if (supabase && orderId) {
-        try {
-          const { data, error } = await supabase
-            .from('orders')
-            .select('*')
-            .eq('order_number', orderId)
-            .maybeSingle();
-
-          if (!error && data && mounted) {
-            setOrder({
-              order_number: data.order_number,
-              customer_name: data.customer_name,
-              customer_email: data.customer_email,
-              customer_phone: data.customer_phone,
-              address: data.address,
-              items: data.items || [],
-              total: Number(data.total),
-              payment_method: data.payment_method || 'COD',
-              payment_status: data.payment_status || 'pending',
-              status: data.status || 'new',
-              created_at: data.created_at || new Date().toISOString(),
-              estimated_delivery: '15 Aug - 18 Aug',
-            });
+  const fetchOrder = async () => {
+    if (!effectiveOrderId) {
+      // Check for most recent order in localStorage
+      try {
+        const existing = localStorage.getItem('a_s_hamper_orders');
+        if (existing) {
+          const parsed = JSON.parse(existing);
+          if (parsed && parsed.length > 0) {
+            setOrder(parsed[0]);
             setLoading(false);
             return;
           }
-        } catch (err) {
-          console.error('Error fetching order from Supabase:', err);
         }
+      } catch (e) {
+        console.error('Error fetching recent orders:', e);
+      }
+      setLoading(false);
+      return;
+    }
+
+    // 1. Check dedicated localStorage cache
+    try {
+      const cached = localStorage.getItem(`as_hamper_order_${effectiveOrderId}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        setOrder(parsed);
+        setLoading(false);
+        return;
       }
 
-      // 3. If no order found, set order to null
-      if (mounted) {
-        setOrder(null);
-        setLoading(false);
+      const allOrders = localStorage.getItem('a_s_hamper_orders');
+      if (allOrders) {
+        const list = JSON.parse(allOrders) as SavedOrder[];
+        const match = list.find((o) => o.order_number === effectiveOrderId);
+        if (match) {
+          setOrder(match);
+          setLoading(false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.error('Error reading local orders:', e);
+    }
+
+    // 2. Fetch from Supabase
+    if (supabase && effectiveOrderId) {
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('order_number', effectiveOrderId)
+          .maybeSingle();
+
+        if (!error && data) {
+          setOrder({
+            order_number: data.order_number,
+            customer_name: data.customer_name,
+            customer_email: data.customer_email,
+            customer_phone: data.customer_phone,
+            address: data.address,
+            delivery_slot: data.delivery_slot,
+            gift_card_note: data.gift_card_note,
+            items: data.items || [],
+            total: Number(data.total),
+            subtotal: data.subtotal ? Number(data.subtotal) : undefined,
+            discount: data.discount ? Number(data.discount) : undefined,
+            delivery_charge: data.delivery_charge ? Number(data.delivery_charge) : 0,
+            customization_charge: data.customization_charge ? Number(data.customization_charge) : 0,
+            wallet_discount: data.wallet_discount ? Number(data.wallet_discount) : 0,
+            payment_method: data.payment_method || 'Razorpay Online',
+            payment_status: data.payment_status || 'paid',
+            payment_id: data.payment_id,
+            status: data.status || 'placed',
+            created_at: data.created_at || new Date().toISOString(),
+            estimated_delivery: data.estimated_delivery || '3-4 Business Days',
+          });
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.error('Error fetching order from database:', err);
       }
     }
 
-    loadOrder();
-    return () => {
-      mounted = false;
-    };
-  }, [orderId]);
+    setOrder(null);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    void fetchOrder();
+
+    const unsub = subscribeToRealtimeOrders(() => {
+      void fetchOrder();
+    });
+
+    return () => unsub();
+  }, [effectiveOrderId]);
+
+  const handleCopyOrderId = () => {
+    if (!order?.order_number) return;
+    navigator.clipboard.writeText(order.order_number);
+    setCopied(true);
+    toast.success('Order Number copied to clipboard');
+    setTimeout(() => setCopied(false), 2500);
+  };
 
   if (loading) {
-    return (
-      <main className="min-h-screen bg-cream-50/60 dark:bg-gray-900 pt-24 pb-20 px-4 flex items-center justify-center text-center font-sans">
-        <div className="space-y-3">
-          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-wine-600 border-t-transparent"></div>
-          <p className="text-xs font-semibold text-wine-800 dark:text-gold-300">
-            Loading order details...
-          </p>
-        </div>
-      </main>
-    );
+    return <LoadingSkeleton type="order-confirmation" />;
   }
+
 
   if (!order) {
     return (
-      <main className="min-h-screen bg-cream-50/60 dark:bg-gray-900 pt-28 pb-20 px-4 flex items-center justify-center text-center font-sans">
-        <div className="max-w-md rounded-3xl bg-white p-8 shadow-xl dark:bg-gray-800 border border-cream-200 dark:border-gray-700">
-          <Package className="mx-auto h-12 w-12 text-wine-600 dark:text-gold-300" />
-          <h2 className="mt-4 font-display text-xl font-bold text-wine-800 dark:text-white">
-            Order Confirmation
+      <main className="min-h-screen bg-[#FAF7F2] dark:bg-[#120D10] pt-28 pb-20 px-4 flex items-center justify-center text-center font-sans">
+        <div className="max-w-md rounded-[2rem] bg-white dark:bg-stone-900 p-8 shadow-xl border border-cream-200 dark:border-stone-800">
+          <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-cream-100 dark:bg-stone-800 text-wine-700 dark:text-gold-400">
+            <Package className="h-8 w-8" />
+          </div>
+          <h2 className="mt-4 font-display text-xl font-bold text-wine-900 dark:text-white">
+            Order Reference Not Found
           </h2>
-          <p className="mt-2 text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
-            Order reference #{orderId} was completed. You can view all your orders in your profile account dashboard.
+          <p className="mt-2 text-xs text-ink-700/70 dark:text-gray-400 leading-relaxed">
+            We couldn't locate active order #{effectiveOrderId}. If your payment succeeded, your order is recorded and visible in your customer account.
           </p>
           <div className="mt-6 flex items-center justify-center gap-3">
             <Link
-              to="/profile"
-              className="rounded-full bg-wine-600 px-6 py-2.5 text-xs font-bold text-white shadow hover:bg-wine-700"
+              to="/customer/orders"
+              className="rounded-full bg-wine-700 px-6 py-2.5 text-xs font-bold text-white shadow hover:bg-wine-800 transition-colors"
             >
-              View My Orders
+              My Orders Dashboard
             </Link>
             <Link
               to="/all-hampers"
-              className="rounded-full border border-cream-300 px-6 py-2.5 text-xs font-bold text-gray-700 dark:border-gray-600 dark:text-gray-200"
+              className="rounded-full border border-cream-300 dark:border-stone-700 px-6 py-2.5 text-xs font-bold text-wine-900 dark:text-stone-300 hover:bg-cream-100 dark:hover:bg-stone-800 transition-colors"
             >
               Shop Hampers
             </Link>
@@ -155,229 +216,249 @@ export default function OrderConfirmationPage() {
   }
 
   return (
-    <main className="min-h-screen bg-cream-50/60 dark:bg-gray-900 pt-24 pb-28 px-4 sm:px-6 lg:px-8 font-sans transition-colors">
-      <div className="mx-auto max-w-4xl space-y-8">
-        {/* Success Header (Requirement 18) */}
-        <div className="rounded-3xl border border-cream-200 bg-white p-8 text-center shadow-lg dark:border-gray-700 dark:bg-gray-800">
-          <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-sage-500/15 text-sage-600 dark:bg-sage-500/25 dark:text-sage-400">
-            <CheckCircle2 className="h-12 w-12" />
+    <main className="min-h-screen bg-[#FAF7F2] dark:bg-[#120D10] pt-24 pb-28 px-4 sm:px-6 lg:px-8 font-sans transition-colors">
+      <div className="mx-auto max-w-4xl space-y-7">
+        
+        {/* Top Celebratory Header Card */}
+        <div className="relative overflow-hidden rounded-[2rem] border border-cream-200/90 dark:border-stone-800 bg-white dark:bg-stone-900 p-6 sm:p-9 text-center shadow-lg">
+          {/* Subtle Ambient Gold Radiance */}
+          <div className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 h-48 w-96 rounded-full bg-gold-400/15 blur-3xl dark:bg-wine-900/30" />
+
+          <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-sage-500/15 text-sage-600 dark:bg-sage-500/25 dark:text-sage-400 shadow-inner">
+            <CheckCircle2 className="h-9 w-9" />
           </div>
 
-          <span className="mt-4 inline-block rounded-full bg-sage-500/10 px-4 py-1 text-xs font-bold uppercase tracking-wider text-sage-700 dark:text-sage-300">
-            ✓ Order Placed Successfully!
+          <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-sage-500/10 dark:bg-sage-500/20 px-3.5 py-1 text-xs font-extrabold uppercase tracking-wider text-sage-800 dark:text-sage-300 border border-sage-500/25">
+            <Sparkles className="h-3 w-3 text-gold-500" /> Order Placed &amp; Confirmed
           </span>
 
-          <h1 className="mt-2 font-display text-2xl sm:text-3xl font-bold text-wine-800 dark:text-white">
-            Thank you for shopping with us!
+          <h1 className="mt-2.5 font-display text-2xl sm:text-3xl font-bold text-wine-900 dark:text-white">
+            Thank you, {order.customer_name.split(' ')[0] || 'Valued Customer'}!
           </h1>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            We have received your order and sent a copy to <span className="font-semibold text-wine-700 dark:text-gold-300">{order.customer_email}</span>.
+          <p className="mt-1.5 text-xs text-ink-700/70 dark:text-stone-300 max-w-lg mx-auto leading-relaxed">
+            Your luxury artisan gift hamper has been received and scheduled for handcrafted packaging. A digital receipt has been sent to{' '}
+            <strong className="text-wine-800 dark:text-gold-300">{order.customer_email}</strong>.
           </p>
 
-          <div className="mt-6 inline-flex flex-wrap items-center justify-center gap-6 rounded-2xl bg-cream-50 p-4 dark:bg-gray-700/60 border border-cream-200 dark:border-gray-600 text-xs">
-            <div>
-              <span className="text-[10px] uppercase font-bold text-gray-400 block">Order Number</span>
-              <span className="font-display font-bold text-wine-800 dark:text-gold-300 text-base">
-                #{order.order_number}
-              </span>
-            </div>
-
-            <div className="h-8 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
-
-            <div>
-              <span className="text-[10px] uppercase font-bold text-gray-400 block">Estimated Delivery</span>
-              <span className="font-semibold text-gray-800 dark:text-white flex items-center gap-1">
-                <Calendar className="h-3.5 w-3.5 text-gold-600" /> {order.estimated_delivery || '15 Aug - 18 Aug'}
-              </span>
-            </div>
-
-            <div className="h-8 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
-
-            <div>
-              <span className="text-[10px] uppercase font-bold text-gray-400 block">Total Amount Paid</span>
-              <span className="font-semibold text-gray-800 dark:text-white">
-                {formatPrice(order.total)} ({order.payment_method})
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Dynamic Order Tracking Pipeline (Requirement 19) */}
-        <div className="rounded-3xl border border-cream-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <h2 className="font-display text-base font-bold text-wine-800 dark:text-white flex items-center gap-2 mb-6">
-            <Truck className="h-4 w-4 text-gold-600" /> Order Tracking
-          </h2>
-
-          <OrderTrackingPipeline status={order.status} />
-        </div>
-
-        {/* Order Details & Items (Requirement 18) */}
-        <div className="grid gap-6 sm:grid-cols-2">
-          {/* Delivery Address */}
-          <div className="rounded-3xl border border-cream-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <h3 className="font-display text-sm font-bold text-wine-800 dark:text-white flex items-center gap-2 border-b border-cream-200 dark:border-gray-700 pb-3">
-              <MapPin className="h-4 w-4 text-gold-600" /> Delivery Address
-            </h3>
-            <div className="mt-3 text-xs text-gray-700 dark:text-gray-300 space-y-1">
-              <p className="font-bold text-wine-800 dark:text-white">{order.customer_name}</p>
-              <p className="text-gray-500 dark:text-gray-400">Ph: {order.customer_phone}</p>
-              <p className="leading-relaxed text-gray-600 dark:text-gray-300">{order.address}</p>
-            </div>
-          </div>
-
-          {/* Payment & Order Summary */}
-          <div className="rounded-3xl border border-cream-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <h3 className="font-display text-sm font-bold text-wine-800 dark:text-white flex items-center gap-2 border-b border-cream-200 dark:border-gray-700 pb-3">
-              <Clock className="h-4 w-4 text-gold-600" /> Payment & Summary
-            </h3>
-            <div className="mt-3 text-xs space-y-2">
-              <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-gray-400">Payment Method:</span>
-                <span className="font-bold text-gray-800 dark:text-white uppercase">{order.payment_method}</span>
+          {/* Quick Metrics Ribbon */}
+          <div className="mt-6 inline-flex flex-wrap items-center justify-center gap-4 sm:gap-8 rounded-2xl bg-cream-50/80 dark:bg-stone-800/80 p-4 border border-cream-200 dark:border-stone-700 text-xs">
+            <div className="flex items-center gap-2">
+              <div className="text-left">
+                <span className="text-[10px] uppercase font-bold text-ink-700/50 dark:text-stone-400 block">
+                  Order Number
+                </span>
+                <span className="font-mono font-bold text-wine-900 dark:text-gold-300 text-sm sm:text-base">
+                  #{order.order_number}
+                </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-gray-400">Payment Status:</span>
-                <span className="font-bold text-sage-600 capitalize">{order.payment_status}</span>
-              </div>
-              <div className="flex justify-between border-t border-cream-200 dark:border-gray-700 pt-2 font-display text-sm font-bold text-wine-800 dark:text-white">
-                <span>Total Amount:</span>
-                <span className="text-wine-700 dark:text-gold-300">{formatPrice(order.total)}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Order Items Listing */}
-        <div className="rounded-3xl border border-cream-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <h3 className="font-display text-base font-bold text-wine-800 dark:text-white border-b border-cream-200 dark:border-gray-700 pb-3">
-            Ordered Items ({order.items.length})
-          </h3>
-
-          <div className="mt-4 space-y-4">
-            {order.items.map((item, idx) => (
-              <div
-                key={idx}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl bg-cream-50 p-4 dark:bg-gray-700/50"
+              <button
+                onClick={handleCopyOrderId}
+                title="Copy Order ID"
+                className="rounded-lg p-1.5 text-ink-700/60 hover:bg-cream-200 dark:hover:bg-stone-700 transition-colors"
               >
-                <div className="flex items-center gap-4">
-                  <img
-                    src={item.image}
-                    alt={item.name}
-                    className="h-16 w-16 rounded-xl object-cover"
-                  />
-                  <div>
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-gold-600">
-                      <Store className="h-3 w-3" /> {item.vendor_name || 'A_S Artisan'}
-                    </span>
-                    <h4 className="font-display text-sm font-bold text-wine-800 dark:text-white">
-                      {item.name}
-                    </h4>
+                {copied ? <Check className="h-4 w-4 text-sage-600" /> : <Copy className="h-4 w-4" />}
+              </button>
+            </div>
 
-                    {item.customization && (
-                      <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
-                        {item.customization.text && <span>Note: "{item.customization.text}"</span>}
-                      </div>
-                    )}
+            <div className="h-7 w-px bg-cream-300 dark:bg-stone-700 hidden sm:block"></div>
+
+            <div className="text-left">
+              <span className="text-[10px] uppercase font-bold text-ink-700/50 dark:text-stone-400 block">
+                Estimated Delivery
+              </span>
+              <span className="font-bold text-wine-900 dark:text-white flex items-center gap-1">
+                <Calendar className="h-3.5 w-3.5 text-gold-600" /> {order.estimated_delivery || '3-4 Business Days'}
+              </span>
+            </div>
+
+            <div className="h-7 w-px bg-cream-300 dark:bg-stone-700 hidden sm:block"></div>
+
+            <div className="text-left">
+              <span className="text-[10px] uppercase font-bold text-ink-700/50 dark:text-stone-400 block">
+                Total Paid
+              </span>
+              <span className="font-extrabold text-wine-900 dark:text-gold-300">
+                {formatPrice(order.total)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Real-time Order Tracking Pipeline Stepper */}
+        <div className="rounded-[1.75rem] border border-cream-200/90 dark:border-stone-800 bg-white dark:bg-stone-900 p-6 sm:p-7 shadow-sm">
+          <OrderTrackingTimeline
+            status={order.status}
+            orderNumber={order.order_number}
+            estimatedDelivery={order.estimated_delivery}
+          />
+        </div>
+
+        {/* 2-Column Delivery & Payment Details Grid */}
+        <div className="grid gap-6 sm:grid-cols-2">
+          
+          {/* Shipping & Recipient Card */}
+          <div className="rounded-[1.75rem] border border-cream-200/90 dark:border-stone-800 bg-white dark:bg-stone-900 p-6 shadow-sm">
+            <h3 className="font-display text-sm font-bold text-wine-900 dark:text-white flex items-center gap-2 border-b border-cream-100 dark:border-stone-800 pb-3">
+              <MapPin className="h-4 w-4 text-gold-600" /> Shipping Destination
+            </h3>
+            <div className="mt-3 text-xs text-ink-800 dark:text-stone-300 space-y-1.5">
+              <p className="font-bold text-wine-900 dark:text-white text-sm">{order.customer_name}</p>
+              <p className="text-ink-700/70 dark:text-stone-400">📞 +91 {order.customer_phone}</p>
+              <p className="text-ink-700/70 dark:text-stone-400">✉️ {order.customer_email}</p>
+              <div className="pt-2 border-t border-cream-100 dark:border-stone-800">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-ink-700/50 dark:text-stone-400 block mb-0.5">
+                  Delivery Address
+                </span>
+                <p className="leading-relaxed text-ink-800 dark:text-stone-300 font-medium">
+                  {order.address}
+                </p>
+              </div>
+
+              {order.delivery_slot && (
+                <div className="pt-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-ink-700/50 dark:text-stone-400 block mb-0.5">
+                    Dispatch Slot
+                  </span>
+                  <p className="text-wine-800 dark:text-gold-300 font-semibold">{order.delivery_slot}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Payment & Gift Note Card */}
+          <div className="rounded-[1.75rem] border border-cream-200/90 dark:border-stone-800 bg-white dark:bg-stone-900 p-6 shadow-sm space-y-4">
+            <div>
+              <h3 className="font-display text-sm font-bold text-wine-900 dark:text-white flex items-center gap-2 border-b border-cream-100 dark:border-stone-800 pb-3">
+                <ShieldCheck className="h-4 w-4 text-gold-600" /> Payment &amp; Security
+              </h3>
+              <div className="mt-3 text-xs space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-ink-700/60 dark:text-stone-400">Payment Mode:</span>
+                  <span className="font-bold text-wine-900 dark:text-white">{order.payment_method}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-ink-700/60 dark:text-stone-400">Payment Status:</span>
+                  <span className="font-bold text-sage-600 capitalize bg-sage-50 dark:bg-sage-950/40 px-2.5 py-0.5 rounded-full text-[11px]">
+                    ✓ {order.payment_status}
+                  </span>
+                </div>
+                {order.payment_id && (
+                  <div className="flex justify-between">
+                    <span className="text-ink-700/60 dark:text-stone-400">Razorpay Ref:</span>
+                    <span className="font-mono text-[11px] text-ink-700 dark:text-stone-300">{order.payment_id}</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-cream-100 dark:border-stone-800 pt-2 font-display text-sm font-bold text-wine-900 dark:text-white">
+                  <span>Grand Total Paid:</span>
+                  <span className="text-wine-800 dark:text-gold-300 text-base">{formatPrice(order.total)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Handwritten Gift Message Preview if present */}
+            {order.gift_card_note && (
+              <div className="rounded-2xl bg-cream-50/80 dark:bg-stone-800/60 p-3.5 border border-cream-200 dark:border-stone-700 text-xs">
+                <div className="flex items-center gap-1.5 font-bold text-wine-900 dark:text-gold-300 mb-1">
+                  <Gift className="h-3.5 w-3.5 text-gold-600" /> Gift Message Card
+                </div>
+                <p className="italic text-ink-700/80 dark:text-stone-300 text-[11px] leading-relaxed">
+                  "{order.gift_card_note}"
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Itemized Order Items Listing */}
+        <div className="rounded-[1.75rem] border border-cream-200/90 dark:border-stone-800 bg-white dark:bg-stone-900 p-6 sm:p-7 shadow-sm">
+          <div className="flex items-center justify-between border-b border-cream-100 dark:border-stone-800 pb-3.5">
+            <h3 className="font-display text-base font-bold text-wine-900 dark:text-white flex items-center gap-2">
+              <Gift className="h-4 w-4 text-gold-600" /> Curated Hamper Items ({order.items.length})
+            </h3>
+            <button
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-wine-700 dark:text-gold-300 hover:underline"
+            >
+              <Printer className="h-3.5 w-3.5" /> Print Tax Invoice
+            </button>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {order.items.map((item, idx) => {
+              const qty = item.quantity || item.qty || 1;
+              const subtotal = item.subtotal || item.price * qty;
+
+              return (
+                <div
+                  key={idx}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl bg-cream-50/60 p-4 dark:bg-stone-800/50 border border-cream-100 dark:border-stone-800"
+                >
+                  <div className="flex items-center gap-4">
+                    <img
+                      src={item.image}
+                      alt={item.name}
+                      onError={(e) => {
+                        e.currentTarget.src =
+                          'https://images.pexels.com/photos/11112057/pexels-photo-11112057.jpeg?auto=compress&cs=tinysrgb&h=650&w=940';
+                      }}
+                      className="h-16 w-16 rounded-xl object-cover bg-white dark:bg-stone-700 shrink-0 border border-cream-200 dark:border-stone-700"
+                    />
+                    <div>
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-gold-600">
+                        <Store className="h-3 w-3" /> {item.vendor_name || 'A_S Artisan Gifting'}
+                      </span>
+                      <h4 className="font-display text-sm font-bold text-wine-900 dark:text-white">
+                        {item.name}
+                      </h4>
+
+                      {item.customization && (
+                        <div className="mt-1 text-[11px] text-ink-700/70 dark:text-stone-400">
+                          {item.customization.text && <span>Personalization: "{item.customization.text}"</span>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-right sm:self-center">
+                    <span className="text-xs text-ink-700/60 dark:text-stone-400 block">
+                      Qty: {qty} × {formatPrice(item.price)}
+                    </span>
+                    <span className="font-display text-sm font-bold text-wine-900 dark:text-gold-300">
+                      {formatPrice(subtotal)}
+                    </span>
                   </div>
                 </div>
-
-                <div className="text-right">
-                  <span className="text-xs text-gray-500 dark:text-gray-400 block">
-                    Qty: {item.quantity} × {formatPrice(item.price)}
-                  </span>
-                  <span className="font-display text-sm font-bold text-wine-800 dark:text-white">
-                    {formatPrice(item.subtotal)}
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
-        {/* Action Buttons (Requirement 18) */}
-        <div className="flex flex-wrap items-center justify-center gap-4 pt-4">
-          <button
-            onClick={() => navigate('/customer')}
-            className="rounded-full bg-wine-600 px-6 py-3 text-xs font-bold text-white shadow-lg shadow-wine-600/30 transition-all hover:bg-wine-700"
-          >
-            Track Order
-          </button>
-          <button
-            onClick={() => navigate('/customer')}
-            className="rounded-full border border-cream-300 bg-white px-6 py-3 text-xs font-semibold text-wine-800 transition-all hover:bg-cream-100 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-          >
-            View My Orders
-          </button>
-          <Link
-            to="/all-hampers"
-            className="rounded-full bg-gold-500 px-6 py-3 text-xs font-bold text-ink-900 transition-all hover:bg-gold-400"
-          >
-            Continue Shopping
-          </Link>
+        {/* Action Buttons & Customer Support Concierge */}
+        <div className="rounded-[1.75rem] bg-wine-900 text-cream-50 p-6 sm:p-7 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+          <div>
+            <h4 className="font-display text-base font-bold text-gold-300 flex items-center gap-2">
+              <Sparkles className="h-4 w-4" /> 24/7 Gifting Concierge Support
+            </h4>
+            <p className="text-xs text-cream-100/70 mt-1 max-w-md">
+              Need custom modifications, special delivery timing, or immediate assistance? Our dedicated gifting managers are available around the clock.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={() => navigate('/customer/orders')}
+              className="rounded-full bg-gold-500 hover:bg-gold-400 text-wine-950 px-5 py-2.5 text-xs font-extrabold shadow transition-all"
+            >
+              Track in Orders Dashboard
+            </button>
+            <Link
+              to="/all-hampers"
+              className="rounded-full border border-gold-400/40 text-cream-100 hover:bg-wine-800 px-5 py-2.5 text-xs font-bold transition-all"
+            >
+              Continue Shopping
+            </Link>
+          </div>
         </div>
       </div>
     </main>
-  );
-}
-
-{/* Order Tracking Pipeline Component (Requirement 19) */}
-function OrderTrackingPipeline({ status = 'new' }: { status?: string }) {
-  const steps = [
-    { key: 'new', label: 'Order Confirmed', done: true },
-    { key: 'packed', label: 'Processing & Packed', done: status === 'packed' || status === 'shipped' || status === 'delivered' },
-    { key: 'shipped', label: 'Shipped', done: status === 'shipped' || status === 'delivered' },
-    { key: 'out', label: 'Out for Delivery', done: status === 'delivered' },
-    { key: 'delivered', label: 'Delivered', done: status === 'delivered' },
-  ];
-
-  return (
-    <div className="py-2">
-      <div className="hidden sm:flex items-center justify-between relative">
-        <div className="absolute top-1/2 left-0 right-0 h-1 bg-cream-200 dark:bg-gray-700 -translate-y-1/2 z-0"></div>
-
-        {steps.map((step, idx) => (
-          <div key={step.key} className="relative z-10 flex flex-col items-center">
-            <div
-              className={`grid h-9 w-9 place-items-center rounded-full text-xs font-bold transition-all ${
-                step.done
-                  ? 'bg-sage-600 text-white ring-4 ring-sage-500/20'
-                  : 'bg-cream-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500'
-              }`}
-            >
-              {step.done ? <CheckCircle2 className="h-5 w-5" /> : idx + 1}
-            </div>
-            <span
-              className={`mt-2 text-[11px] font-semibold ${
-                step.done ? 'text-wine-800 dark:text-gold-300' : 'text-gray-400'
-              }`}
-            >
-              {step.label}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* Mobile Stacked Step View */}
-      <div className="sm:hidden space-y-3">
-        {steps.map((step, idx) => (
-          <div key={step.key} className="flex items-center gap-3">
-            <div
-              className={`grid h-7 w-7 place-items-center rounded-full text-xs font-bold ${
-                step.done ? 'bg-sage-600 text-white' : 'bg-gray-200 text-gray-500 dark:bg-gray-700'
-              }`}
-            >
-              {step.done ? '✓' : idx + 1}
-            </div>
-            <span
-              className={`text-xs font-semibold ${
-                step.done ? 'text-wine-800 dark:text-gold-300' : 'text-gray-400'
-              }`}
-            >
-              {step.label}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }

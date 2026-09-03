@@ -1,8 +1,9 @@
 import { useAuth } from '@/hooks/useAuth';
 import VendorAuth from '@/components/VendorAuth';
 import VendorDashboard from '@/components/VendorDashboard';
-import { Check, Store, ShieldAlert, LogOut, ArrowRight, Loader2 } from 'lucide-react';
+import { Check, Store, ShieldAlert, LogOut, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { LoadingSkeleton } from '@/components/LoadingSkeleton';
 
 const benefits = [
   'Reach gifting customers across India with curated hampers',
@@ -17,9 +18,9 @@ export default function VendorPage() {
 
   if (loading) {
     return (
-      <div className="grid place-items-center min-h-screen pt-24">
-        <Loader2 className="h-8 w-8 animate-spin text-wine-600 dark:text-gold-300" />
-      </div>
+      <main className="min-h-screen pt-24 pb-16 px-4 sm:px-8 max-w-7xl mx-auto font-sans">
+        <LoadingSkeleton type="dashboard" />
+      </main>
     );
   }
 

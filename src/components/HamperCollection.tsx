@@ -6,6 +6,7 @@ import { VendorStore, HAMPER_CATEGORIES, type VendorHamper } from '@/lib/vendorS
 import { formatPrice, useCart } from '@/cart';
 import { useWishlist } from '@/hooks/useWishlist';
 import HamperDetailModal from './HamperDetailModal';
+import { LoadingSkeleton } from '@/components/LoadingSkeleton';
 
 const categoriesList = [
   { id: 'all', label: '✨ All Occasions' },

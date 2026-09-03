@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { formatPrice } from '@/cart';
 import { VendorStore, type VendorHamper, type HamperItem } from '@/lib/vendorStore';
 import { AdminSettings, BestSellersAdmin, CouponManagement, Customers, Inventory, Notifications, Reports, ResourceManager, ReviewManagement, SameDayDeliveryAdmin, AdminReturnsManager } from '@/components/AdminOperations';
+import { LoadingSkeleton } from '@/components/LoadingSkeleton';
 import {
   Package, ShoppingBag, Plus, Pencil, Trash2, X, Loader2, Search, TrendingUp, Save, ShieldCheck, UserPlus, LogOut,
 } from 'lucide-react';
@@ -106,9 +107,7 @@ export default function AdminDashboard() {
 
       <div className="p-6 sm:p-8">
         {loading ? (
-          <div className="grid place-items-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-wine-600" />
-          </div>
+          <LoadingSkeleton type="admin-dashboard" />
         ) : (
           <>
             {tab === 'overview' && <Overview products={products} orders={orders} revenue={revenue} newCount={newCount} customerCount={customerCount} />}

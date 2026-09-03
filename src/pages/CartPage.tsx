@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { formatPrice, useCart, type CartItem } from '@/cart';
 import { products as fallbackProducts } from '@/data';
+import ConfirmationDialog from '@/components/ConfirmationDialog';
 
 export default function CartPage() {
   const navigate = useNavigate();
@@ -45,6 +46,9 @@ export default function CartPage() {
   const [couponMsg, setCouponMsg] = useState<{ success: boolean; text: string } | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
   const [wishlistSaved, setWishlistSaved] = useState<Record<string, boolean>>({});
+
+  // Confirmation dialog state for item removal
+  const [itemToRemove, setItemToRemove] = useState<CartItem | null>(null);
 
   const handleApplyCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,8 +134,14 @@ export default function CartPage() {
                 item={item}
                 isWishlisted={!!wishlistSaved[item.product.slug]}
                 onToggleWishlist={() => toggleWishlist(item.product.slug)}
-                onSetQty={(q) => setQty(item.product.slug, q)}
-                onRemove={() => remove(item.product.slug)}
+                onSetQty={(q) => {
+                  if (q <= 0) {
+                    setItemToRemove(item);
+                  } else {
+                    setQty(item.product.slug, q);
+                  }
+                }}
+                onRemove={() => setItemToRemove(item)}
               />
             ))}
 
@@ -293,6 +303,25 @@ export default function CartPage() {
           </div>
         </div>
       </div>
+
+      {/* Confirmation Dialog for Destructive Remove Action */}
+      <ConfirmationDialog
+        isOpen={!!itemToRemove}
+        title="Remove Item from Cart?"
+        message="Are you sure you want to remove this curated hamper from your shopping cart? You can add it back anytime from the catalog."
+        confirmText="Remove Item"
+        cancelText="Keep Item"
+        variant="danger"
+        itemName={itemToRemove?.product.name}
+        itemImage={itemToRemove?.product.image}
+        onConfirm={() => {
+          if (itemToRemove) {
+            remove(itemToRemove.product.slug);
+            setItemToRemove(null);
+          }
+        }}
+        onCancel={() => setItemToRemove(null)}
+      />
     </main>
   );
 }

@@ -45,8 +45,8 @@ export async function openRazorpayCheckout({
 
   const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID;
 
-  // If no explicit production key is defined or if test key format fails, trigger fail-safe payment gateway modal
-  if (!razorpayKey || razorpayKey === 'rzp_test_AS_Hamper_2026') {
+  // If no explicit production or test key is defined, trigger fail-safe payment gateway modal
+  if (!razorpayKey) {
     onFailure('RAZORPAY_FALLBACK');
     return;
   }
