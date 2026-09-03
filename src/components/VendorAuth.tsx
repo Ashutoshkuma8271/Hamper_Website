@@ -303,7 +303,7 @@ export default function VendorAuth() {
         {mode === 'login' && (
           <div className="flex justify-end">
             <Link
-              to="/forgot-password"
+              to="/forgot-password?role=vendor"
               className="text-xs font-semibold text-wine-700 hover:underline dark:text-gold-300"
             >
               Forgot Password?

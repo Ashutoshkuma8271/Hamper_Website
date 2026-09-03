@@ -53,6 +53,8 @@ export default function AddressManager({
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [pincode, setPincode] = useState('');
+  const [country, setCountry] = useState('India');
+  const [deliveryInstructions, setDeliveryInstructions] = useState('');
   const [addressType, setAddressType] = useState<'Home' | 'Work' | 'Other'>('Home');
   const [isDefault, setIsDefault] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -93,6 +95,8 @@ export default function AddressManager({
     setCity('');
     setState('');
     setPincode('');
+    setCountry('India');
+    setDeliveryInstructions('');
     setAddressType('Home');
     setIsDefault(addresses.length === 0);
     setFormError(null);
@@ -110,6 +114,8 @@ export default function AddressManager({
     setCity(addr.city);
     setState(addr.state);
     setPincode(addr.pincode);
+    setCountry(addr.country || 'India');
+    setDeliveryInstructions(addr.delivery_instructions || '');
     setAddressType(addr.address_type);
     setIsDefault(addr.is_default);
     setFormError(null);
@@ -168,6 +174,8 @@ export default function AddressManager({
           city: city.trim(),
           state: state.trim(),
           pincode: pincode.trim(),
+          country: country.trim() || 'India',
+          delivery_instructions: deliveryInstructions.trim(),
           address_type: addressType,
           is_default: isDefault,
         },
@@ -317,7 +325,18 @@ export default function AddressManager({
                     {addr.landmark ? `, Near ${addr.landmark}` : ''}
                     <br />
                     {addr.city}, {addr.state} - <strong className="text-wine-900 dark:text-gold-300 font-mono">{addr.pincode}</strong>
+                    <br />
+                    <span className="text-[11px] text-ink-700/60 dark:text-stone-400 font-medium">
+                      {addr.country || 'India'}
+                    </span>
                   </p>
+
+                  {addr.delivery_instructions && (
+                    <div className="mt-2 rounded-xl bg-cream-100/60 dark:bg-stone-700/40 px-2.5 py-1.5 text-[11px] text-wine-900/80 dark:text-stone-300 flex items-start gap-1.5 border border-cream-200/70 dark:border-stone-700">
+                      <span className="font-bold shrink-0">Note:</span>
+                      <span className="italic">{addr.delivery_instructions}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Actions bottom bar */}
@@ -516,6 +535,33 @@ export default function AddressManager({
                   value={landmark}
                   onChange={(e) => setLandmark(e.target.value)}
                   placeholder="e.g. Opp. City Grand Hotel"
+                  className="w-full rounded-xl border border-cream-300 bg-white px-3.5 py-2.5 text-xs text-wine-900 outline-none focus:border-wine-600 dark:border-stone-600 dark:bg-stone-800 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-ink-700/70 dark:text-stone-300 mb-1">
+                  Country *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  placeholder="India"
+                  className="w-full rounded-xl border border-cream-300 bg-white px-3.5 py-2.5 text-xs text-wine-900 outline-none focus:border-wine-600 dark:border-stone-600 dark:bg-stone-800 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-ink-700/70 dark:text-stone-300 mb-1">
+                  Delivery Instructions (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={deliveryInstructions}
+                  onChange={(e) => setDeliveryInstructions(e.target.value)}
+                  placeholder="e.g. Leave with building security / concierge, Call upon arrival"
                   className="w-full rounded-xl border border-cream-300 bg-white px-3.5 py-2.5 text-xs text-wine-900 outline-none focus:border-wine-600 dark:border-stone-600 dark:bg-stone-800 dark:text-white"
                 />
               </div>

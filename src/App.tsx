@@ -40,19 +40,34 @@ function App() {
         <CartProvider>
           <WishlistProvider>
             <Toaster
-              position="top-right"
+              position="top-center"
               reverseOrder={false}
+              gutter={10}
               toastOptions={{
                 duration: 3000,
                 style: {
-                  background: '#44040F',
-                  color: '#F5EBD0',
-                  border: '1px solid #FBDE9C',
-                  borderRadius: '16px',
-                  padding: '12px 18px',
+                  background: '#2B040B',
+                  color: '#FAF4E8',
+                  border: '1px solid rgba(229, 192, 123, 0.4)',
+                  borderRadius: '9999px',
+                  padding: '10px 20px',
                   fontSize: '13px',
                   fontWeight: 600,
-                  boxShadow: '0 15px 35px -5px rgba(68,4,15,0.45)',
+                  boxShadow: '0 20px 40px -10px rgba(43, 4, 11, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+                  backdropFilter: 'blur(8px)',
+                  letterSpacing: '0.01em',
+                },
+                success: {
+                  iconTheme: {
+                    primary: '#D4AF37',
+                    secondary: '#2B040B',
+                  },
+                },
+                error: {
+                  iconTheme: {
+                    primary: '#E53E3E',
+                    secondary: '#FAF4E8',
+                  },
                 },
               }}
             />

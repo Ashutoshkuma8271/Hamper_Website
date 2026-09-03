@@ -12,6 +12,8 @@ export interface DeliveryAddress {
   city: string;
   state: string;
   pincode: string;
+  country?: string;
+  delivery_instructions?: string;
   address_type: 'Home' | 'Work' | 'Other';
   is_default: boolean;
   created_at?: string;
@@ -129,6 +131,8 @@ export async function saveDeliveryAddress(
     city: address.city.trim(),
     state: address.state.trim(),
     pincode: address.pincode.trim(),
+    country: address.country?.trim() || 'India',
+    delivery_instructions: address.delivery_instructions?.trim() || '',
     address_type: address.address_type || 'Home',
     is_default: address.is_default || false,
     created_at: new Date().toISOString(),
